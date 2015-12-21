@@ -134,11 +134,17 @@ for my $currentTrip (keys %Trips) {
 	if (not defined $Trips{$currentTrip}{shape_id}) {
 		if ($Debug) { print "New unique trip found, let's call it ", $currentTrip, "!\n"; }
 		$Trips{$currentTrip}{shape_id} = $currentTrip;
-		shape_request($currentTrip);
+		$Trips{$currentTrip}{headsign} = shape_request($currentTrip);
 		for my $comparisonTrip (keys %Trips) {
 			if ($Trips{$currentTrip}{stops} ~~ $Trips{$comparisonTrip}{stops} and $currentTrip ne $comparisonTrip) {
-				if ($Debug) { print "Trip $comparisonTrip matches current stop pattern.\n"; }
+				if ($Debug) { 
+					print "Trip $comparisonTrip matches current stop pattern.\n";
+					print join(", ", @{ $Trips{$currentTrip}{stops} });
+					print "\n";
+					print join(", ", @{ $Trips{$comparisonTrip}{stops} });
+				}
 				$Trips{$comparisonTrip}{shape_id} = $Trips{$currentTrip}{shape_id};
+				$Trips{$comparisonTrip}{headsign} = $Trips{$currentTrip}{headsign};
 			}
 		}
 	}
@@ -161,8 +167,8 @@ for my $currentTrip (keys %Trips) {
 
 for my $updateTrip (keys %Trips) {
 	if ($Trips{$updateTrip}{shape_id} ne '') {
-	my $sth = $dbh->prepare('UPDATE trips set shape_id = ? where trip_id LIKE ?');
-	$sth->execute($Trips{$updateTrip}{shape_id},$updateTrip);
+	my $sth = $dbh->prepare('UPDATE trips set shape_id = ?, trip_headsign = ? where trip_id LIKE ?');
+	$sth->execute($Trips{$updateTrip}{shape_id},$Trips{$updateTrip}{headsign},$updateTrip);
 	}
 }
 print "Trips updated in database\n";
@@ -218,8 +224,9 @@ sub shape_request {
 		"&name_destination=" . $destination .
 		"&type_via=stop" .
 		"&name_via=" . $via .
-		"&coordOutputFormat=WGS84" .
-		"&coordListOutputFormat=STRING";
+		"&coordOutputFormat=WGS84[DD.dddddd]" .
+		"&coordListOutputFormat=STRING" .
+		"&ptOptionsActive=1&maxChanges=0";
 		if ($Debug) { print "$requesturl\n"; }
 		
 	my $efaresult = XML::LibXML->load_xml( location => $requesturl );
@@ -227,7 +234,6 @@ sub shape_request {
 
 	my $coordString = @{ ($efaresult->findnodes('//itdRoute[@changes="0"]/itdPartialRouteList/itdPartialRoute/itdPathCoordinates/itdCoordinateString')) }[0];
 	if (defined $coordString) {
-		$coordString =~ s/.00000//g;
 		$coordString =~ s/ /,/g;
 		$coordString =~ s/^<.*>(.*)<.*>$/$1/;
 
@@ -238,8 +244,8 @@ sub shape_request {
 
 		for (my $ca = 0; $ca < $#coordArray; $ca = $ca+2) {
 			if (length($coordArray[$ca])>4 and length($coordArray[$ca+1])>4) {
-				my $longitude = substr($coordArray[$ca],0, length($coordArray[$ca])-6) . "." . substr($coordArray[$ca],-6);
-				my $latitude = substr($coordArray[$ca+1],0, length($coordArray[$ca+1])-6) . "." . substr($coordArray[$ca+1],-6);
+				my $longitude = $coordArray[$ca];
+				my $latitude = $coordArray[$ca+1];
 			
 				my $shapesth = $dbh->prepare('INSERT INTO shapes (shape_id, shape_pt_lat, shape_pt_lon, shape_pt_sequence) VALUES (?,?,?,?)');
 				$shapesth->execute($Trips{$shapetrip}{shape_id},$latitude,$longitude,$sequence);
@@ -248,6 +254,13 @@ sub shape_request {
 		}
 		$dbh->commit();
 	}
+
+	my $headsignNode = @{ ( $efaresult->findnodes('//itdRoute[@changes="0"]/itdPartialRouteList/itdPartialRoute/itdMeansOfTransport') ) }[0];
+	if (defined $headsignNode) {
+		my $headsignString = $headsignNode->getAttribute( 'destination' );
+		if ($Debug) { print "Headsign: $headsignString\n"; }
+		return $headsignString;
+	} else { return ""; }
 }
 
 
@@ -261,7 +274,7 @@ sub dbconnect {
 	$dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 }) 
 		                    or die $DBI::errstr;
 	$dbh->{AutoCommit} = 0;
-	$dbh->do( "PRAGMA synchronous=OFF" );
+	#$dbh->do( "PRAGMA synchronous=OFF" );
 
 		print "Opened database successfully\n";
 }
