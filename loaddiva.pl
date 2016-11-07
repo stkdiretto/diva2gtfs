@@ -28,7 +28,7 @@ my $divadbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 })
 
 # sacrificing security for speed
 $divadbh->{AutoCommit} = 0;
-$divadbh->do( "PRAGMA synchronous=OFF" );
+$divadbh->do( "COMMIT; PRAGMA synchronous=OFF; BEGIN TRANSACTION" );
 
 	print "Opened database successfully\n";
 

@@ -228,7 +228,7 @@ sub dbconnect {
 	$dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 }) 
 		                    or die $DBI::errstr;
 	$dbh->{AutoCommit} = 0;
-	$dbh->do( "PRAGMA synchronous=OFF" );
+	$dbh->do( "COMMIT; PRAGMA synchronous=OFF; BEGIN TRANSACTION" );
 
 		print "Opened database successfully\n";
 

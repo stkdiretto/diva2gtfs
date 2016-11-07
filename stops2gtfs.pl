@@ -26,7 +26,7 @@ my $divadbh = DBI->connect($divadsn, $userid, $password, { RaiseError => 1 })
 
 # sacrificing security for speed
 $divadbh->{AutoCommit} = 0;
-$divadbh->do( "PRAGMA synchronous=OFF" );
+$divadbh->do( "COMMIT; PRAGMA synchronous=OFF; BEGIN TRANSACTION" );
 
 	print "Opened diva-database successfully\n";
 
@@ -37,7 +37,7 @@ my $dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 })
 
 # sacrificing security for speed
 $dbh->{AutoCommit} = 0;
-$dbh->do( "PRAGMA synchronous=OFF" );
+$dbh->do( "COMMIT; PRAGMA synchronous=OFF; BEGIN TRANSACTION" );
 
 	print "Opened gtfs-database successfully\n";
 
@@ -51,8 +51,27 @@ $dbh->do( "PRAGMA synchronous=OFF" );
 #--------------------------------------------
 
 my %CS2CS_params = (
-		NBWT => '+init=epsg:31467 +to +init=epsg:4326'
+		GIP1 => '+init=epsg:31259 +to +init:epsg:4326', #should be the same as STVH but offset is 6000000 and not 1000000
+		MVTT => '+init=epsg:31466 +to +init=epsg:4326',
+		NAV2 => '+init=epsg:31466 +to +init=epsg:4326',
+		NAV3 => '+init=epsg:31467 +to +init=epsg:4326',
+		NAV4 => '+init=epsg:31468 +to +init=epsg:4326',
+		NAV5 => '+init=epsg:31469 +to +init=epsg:4326',
+		NBWT => '+init=epsg:31467 +to +init=epsg:4326',
+		STVH => '+init=epsg:31259 +to +init:epsg:4326',
+		VVTT => '+init=epsg:31257 +to +init=epsg:4326'
 		);
+	my %offsets = (
+                GIP1 => 6000000,
+                MVTT => 6160100,
+                NAV2 => 6160100,
+                NAV3 => 6160100,
+                NAV4 => 6160100,
+                NAV5 => 6160100,
+                NBWT => 6160100,
+                STVH => 1000000
+                VVTT => 1000000
+                );
 
 	my $stop_id ="";
 	my $stop_name = "";
@@ -62,7 +81,7 @@ my %CS2CS_params = (
 
 	print "Parent stations ";
 
-	my $sth = $divadbh->prepare('SELECT S.hstnr AS stop_id, S.hstname AS stop_name, group_concat(tz.tzonen,"") AS zone_id, HK.x AS stop_lat, (-1 * (HK.y - 6160000)) AS stop_lon, HK.plan AS plan
+	my $sth = $divadbh->prepare('SELECT S.hstnr AS stop_id, S.hstname AS stop_name, group_concat(tz.tzonen,"") AS zone_id, HK.x AS stop_lat, HK.y AS stop_lon, HK.plan AS plan
 FROM Stop AS S LEFT OUTER JOIN Stop_hst_koord as HK ON S._AutoKey_=HK._FK__AutoKey_ AND HK.plan="NBWT" AND S.input=HK.input LEFT OUTER JOIN Stop_tzonen as tz ON S._AutoKey_=tz._FK__AutoKey_ AND S.input=tz.input 
 WHERE S._AutoKey_ IN (SELECT SHS._FK__AutoKey_ FROM Stop_hst_steig AS SHS WHERE S.input = SHS.input)
 GROUP BY stop_id, HK.x');
@@ -78,7 +97,7 @@ GROUP BY stop_id, HK.x');
 
 			if (defined $row->{stop_lat} and defined $row->{stop_lon}) { 
 				$stop_lat = $row->{stop_lat}; 
-				$stop_lon = $row->{stop_lon}; 
+				$stop_lon = -1 * ($row->{stop_lon} - $offsets{$row->{plan}});
 
 				my @coords1=split(/\s+/, `echo $stop_lat $stop_lon | cs2cs -f "%.8f" $CS2CS_params{$row->{plan}}`);
 
@@ -102,7 +121,7 @@ GROUP BY stop_id, HK.x');
 
 	print "Child stations";
 
-	$sth = $divadbh->prepare('SELECT S.hstnr AS stop_id, S.hstname AS stop_name, group_concat(tz.tzonen,"") as zone_id, SHS.steig AS steig, SPK.x AS stop_lat, (- 1 * (SPK.y - 6160000)) AS stop_lon, SPK.plan AS plan
+	$sth = $divadbh->prepare('SELECT S.hstnr AS stop_id, S.hstname AS stop_name, group_concat(tz.tzonen,"") as zone_id, SHS.steig AS steig, SPK.x AS stop_lat, SPK.y AS stop_lon, SPK.plan AS plan
 FROM Stop AS S LEFT OUTER JOIN Stop_tzonen as tz ON S._AutoKey_=tz._FK__AutoKey_ AND S.input=tz.input LEFT OUTER JOIN Stop_hst_steig AS SHS on S._AutoKey_ = SHS._FK__AutoKey_ AND S.input=SHS.input LEFT OUTER JOIN StopPlatformKoord AS SPK ON SHS._AutoKey_ = SPK._FK__AutoKey_ AND SHS.input=SPK.input AND SPK.plan = "NBWT" 
 WHERE SHS.steig NOT LIKE "Eing%"
 GROUP BY stop_id, steig, SPK.x');
@@ -117,8 +136,8 @@ GROUP BY stop_id, steig, SPK.x');
 			if (defined $row->{zone_id}) { $zone_id = $row->{zone_id}; }
 
 			if (defined $row->{stop_lat} and defined $row->{stop_lon}) { 
-				$stop_lat = $row->{stop_lat}; 
-				$stop_lon = $row->{stop_lon}; 
+				$stop_lat = $row->{stop_lat};
+				$stop_lon = -1 * ($row->{stop_lon} - $offsets{$row->{plan}});
 
 				my @coords2=split(/\s+/, `echo $stop_lat $stop_lon | cs2cs -f "%.8f" $CS2CS_params{$row->{plan}}`);
 
@@ -142,7 +161,7 @@ GROUP BY stop_id, steig, SPK.x');
 
 	print "Stations without child stations";
 
-$sth = $divadbh->prepare('SELECT S.hstnr AS stop_id, S.hstname AS stop_name, group_concat(tz.tzonen,"") as zone_id, HK.x AS stop_lat, (-1 * (HK.y - 6160000)) AS stop_lon, HK.plan AS plan
+$sth = $divadbh->prepare('SELECT S.hstnr AS stop_id, S.hstname AS stop_name, group_concat(tz.tzonen,"") as zone_id, HK.x AS stop_lat, HK.y AS stop_lon, HK.plan AS plan
 FROM Stop AS S LEFT OUTER JOIN Stop_tzonen as tz ON S._AutoKey_=tz._FK__AutoKey_ AND S.input=tz.input LEFT OUTER JOIN Stop_hst_koord as HK ON S._AutoKey_=HK._FK__AutoKey_ AND HK.plan="NBWT" AND S.input=HK.input
 WHERE S._AutoKey_ NOT IN (SELECT SHS._FK__AutoKey_ FROM Stop_hst_steig AS SHS WHERE S.input = SHS.input)
 GROUP BY stop_id, HK.x');
@@ -154,7 +173,7 @@ GROUP BY stop_id, HK.x');
 
 			if (defined $row->{stop_lat} and defined $row->{stop_lon}) { 
 				$stop_lat = $row->{stop_lat}; 
-				$stop_lon = $row->{stop_lon}; 
+				$stop_lon = -1 * ($row->{stop_lon} - $offsets{$row->{plan}});
 
 				my @coords1=split(/\s+/, `echo $stop_lat $stop_lon | cs2cs -f "%.8f" $CS2CS_params{$row->{plan}}`);
 
