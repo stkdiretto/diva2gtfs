@@ -5,12 +5,11 @@ use warnings;
 use utf8;
 use Switch;
 use DBI;
+use File::Path qw(make_path);
 use Text::ParseWords;
 use Getopt::Long;
 use Digest::MD5 qw(md5);
-
-
- use open ':encoding(cp850)';
+use open ':encoding(cp850)';
 
 # take care of windows newlines
 $/ = "\r\n";
@@ -18,8 +17,9 @@ $/ = "\r\n";
 
 # DEFINE I/O FILES
 my $log;
-	open ($log, ">","log.txt") or die "Something terrible happened while opening my log file: $!";
-#	open ($log, ">","/dev/null") or die "Something terrible happened while opening my log file: $!";
+my $log_folder = "build/log";
+open ($log, ">","$log_folder/diva2gtfs.log") or die "Something terrible happened while opening my log file: $!";
+#open ($log, ">","/dev/null") or die "Something terrible happened while opening my log file: $!";
 
 my $divadbh;
 my $dbh;
@@ -30,53 +30,58 @@ my $textpfp;
 my $textbalang;
 my $basepath = '';
 
-
 dbconnect();
 
-GetOptions	(	"path=s"		=>	\$basepath)
-						or die("Error in command line arguments\n");
+GetOptions	( "path=s" => \$basepath) or die("Error in command line arguments\n");
 
+my $sth = $divadbh->prepare('SELECT uvz,lierg,kbez,textpfp,TextBAlang FROM TabelleLnrlit');
+$sth->execute();
 
-	my $sth = $divadbh->prepare('SELECT uvz,lierg,kbez,textpfp,TextBAlang FROM TabelleLnrlit');
-	$sth->execute();
-	
-	while (my $row = $sth->fetchrow_hashref()) {
-	
-		# naming confusion galore.
-		# tripname: Everything, e.g. 11310a or 11310_
-		# basename: Just the operator and route, e.g. 11310
-		$tripname = $row->{lierg};
-		$tripname =~ /(?<basename>(?<operator>.{2}).{2}[^_]?).+/;
-		$operator = $+{operator};
-		$basename = $+{basename};
-		# trim trailing spaces
-		$tripname =~ s/\s/_/;
-		$basename =~ s/\s+$//;
-		
-		$textpfp = $row->{textpfp};
-		$textpfp =~ s/\s+$//;
-		
-		$textbalang = $row->{TextBAlang};
-		$textbalang =~ s/\s+$//;
-	
-		
-		# build the path to each file. Pattern is uvz/lierg.kbez with trimmed spaces
-		my $path = $basepath . $row->{uvz} . "/" . $tripname . "." . $row->{kbez};
-		print "Route: $basename, tripname $tripname, Path: $path\n";
-		
-		
+while (my $row = $sth->fetchrow_hashref()) {
 
-		if($textpfp eq $textbalang) {undef $textbalang;}
-		
-		my $newroute = $dbh->prepare('INSERT OR REPLACE INTO routes (route_id, agency_id, route_short_name, route_long_name) VALUES (?, ?, ?, ?)');
-		$newroute->execute($operator."-".$textpfp,$operator,$textpfp,$textbalang);
+	# naming confusion galore.
+	# tripname: Everything, e.g. 11310a or 11310_
+	# basename: Just the operator and route, e.g. 11310
+	$tripname = $row->{lierg};
+	$tripname =~ /(?<basename>(?<operator>.{2}).{2}[^_]?).+/;
+	$operator = $+{operator};
+	$basename = $+{basename};
 
-		$dbh->commit;
-		
-		my %job = ('path' => $path, 'tripname' => $tripname, 'operator' => $operator ,'textpfp' => $textpfp, 'textbalang' => $textbalang, 'route' => $operator . "-" . $textpfp);
-		process(%job);
+	# trim trailing spaces
+	$tripname =~ s/\s/_/;
+	$basename =~ s/\s+$//;
+
+	$textpfp = $row->{textpfp};
+	$textpfp =~ s/\s+$//;
+
+	$textbalang = $row->{TextBAlang};
+	$textbalang =~ s/\s+$//;
+
+	# build the path to each file. Pattern is uvz/lierg.kbez with trimmed spaces
+	my $path = $basepath . $row->{uvz} . "/" . $tripname . "." . $row->{kbez};
+	print "Route: $basename, tripname $tripname, Path: $path\n";
+
+	if($textpfp eq $textbalang) {
+		undef $textbalang;
 	}
-	
+
+	my $newroute = $dbh->prepare('INSERT OR REPLACE INTO routes (route_id, agency_id, route_short_name, route_long_name) VALUES (?, ?, ?, ?)');
+	$newroute->execute($operator."-".$textpfp,$operator,$textpfp,$textbalang);
+
+	$dbh->commit;
+
+	my %job = (
+		'path' => $path,
+		'tripname' => $tripname,
+		'operator' => $operator ,
+		'textpfp' => $textpfp,
+		'textbalang' => $textbalang,
+		'route' => $operator . "-" . $textpfp
+	);
+
+	process(%job);
+}
+
 
 # ------------------------------------------
 # ITERATE OVER ALL FILES PASSED AS ARGUMENTS
@@ -101,8 +106,8 @@ sub expandtimes {
 			for (my $i = 0; $i < $1; $i++) {
 				push @timearray, $2;
 			}
-		} 
-		# deal with single occurrences						
+		}
+		# deal with single occurrences
 		else {
 			push @timearray, $_;
 		}
@@ -120,9 +125,9 @@ sub expandtimes {
 
 sub process {
 	my %process = @_;
-	open ($log, ">>","log.txt") or die "Something even more terrible happened while opening my log file: $!";
 	my $file = $process{path};
-		print $log "Now working on $file\n";
+
+	print $log "Now working on $file\n";
 
 	if (open FILE, "<", "$file") {
 		my $line;
@@ -138,67 +143,63 @@ sub process {
 
 			# ----------------------------------------------------------
 			# HEADERS FOR EACH DIRECTION TO BE TAKEN CARE OF
-		  # These are: Stop Patterns, Stop Platforms, Timing Patterns
+			# These are: Stop Patterns, Stop Platforms, Timing Patterns
 			# ----------------------------------------------------------
-
 
 			# Recognize Fahrwege (Stop patterns)
 			if ($line =~ s/FW[0-9]*[H,R]//) {
 				@stops = ();
 				push @stops, substr $line, 0, 4, '' while $line;
-					print $log " FW recognized: ";
-					print $log "$_ " for @stops;
-					print $log "\n";
-				} 
-
+				print $log " FW recognized: ";
+				print $log "$_ " for @stops;
+				print $log "\n";
+			}
 			# Recognize Stop Platforms
 			elsif ($line =~ s/ST[H,R][0-9]{3}//) {
-
-				# will do this later :'( TODO
-					print $log " Platform line recognized: ";
+				# TODO: will do this later :'(
+				print $log " Platform line recognized: ";
 
 				while ($line =~ /([0-9]{3})(.{5})/g) {
-
 					my $stid = $1;
 					my $plat = $2;
 
 					$plat =~ s/\s+$//; # trim trailing spaces
-	#				$plat =~ s/\+.*//;
+#					$plat =~ s/\+.*//;
 					print $log "$plat ";
 
 					if ($plat ne '-' and $plat ne '0') {
 						$stops[$stid] = $stops[$stid] . $plat;
 					}
 				}
-					print $log "\n";
-			}
 
+				print $log "\n";
+			}
 			# Recognize Timing Patterns
 			elsif ($line =~ /FT(?<ftid>[HR][0-9]{5}).{2}(?<pattern>.*)[ ,N].* .*/) {
-					# create identifier for current pattern
-					my $ftid = $+{ftid};
-						print $log " Timing Pattern: $ftid ; ";
-					my $pattern = $+{pattern};
+				# create identifier for current pattern
+				my $ftid = $+{ftid};
+				print $log " Timing Pattern: $ftid ; ";
+				my $pattern = $+{pattern};
 
-						print $log "$pattern \n   ";
-					# match: *00-, *0000, *00|, *00$ or 00 or - or | or $
-					# write everything in temporary tmparray for later expansion of * sequences
-		 			my @tmparray = $pattern =~ /(\*[0-9]{2}\-|\*[0-9]{4}|\*[0-9]{2}\||\*[0-9]{2}\$|[0-9]{2}|\-|\||[\$])/g;
-					# expand * sequences
-					@{ $FT{$ftid} } = expandtimes(@tmparray);
+				print $log "$pattern \n   ";
+				# match: *00-, *0000, *00|, *00$ or 00 or - or | or $
+				# write everything in temporary tmparray for later expansion of * sequences
+	 			my @tmparray = $pattern =~ /(\*[0-9]{2}\-|\*[0-9]{4}|\*[0-9]{2}\||\*[0-9]{2}\$|[0-9]{2}|\-|\||[\$])/g;
+				# expand * sequences
+				@{ $FT{$ftid} } = expandtimes(@tmparray);
 
-						# output written timing pattern to debug log for debugging purposes
-						foreach (@{ $FT{$ftid} }) {
-							print $log "$_ ";
-							if ($_ eq '-' || $_ eq '|' || $_ eq '$') { print $log " ";}
-						}
-						print $log "\n";
+				# output written timing pattern to debug log for debugging purposes
+				foreach (@{ $FT{$ftid} }) {
+					print $log "$_ ";
+					if ($_ eq '-' || $_ eq '|' || $_ eq '$') { print $log " ";}
 				}
-				# Done with timing pattern
+				print $log "\n";
+			}
+			# Done with timing pattern
 
 			# -------------------------------
 			# HEADERS BEEN TAKEN CARE OF HERE
-		  # -------------------------------
+			# -------------------------------
 
 
 			# -----------------------
@@ -239,16 +240,14 @@ sub process {
 						$direction = 1;
 					}
 
-	#				 if train, use train number as trip id
+					# if train, use train number as trip id
 					if (defined $+{trainid}) {
 						$trip_short_name = $+{traintype} . $+{trainid};
 					}
 
 					# take care of service restriction. If a restriction is defined,
 					# the previous service id is replaced
-
 					my $service_id = $+{serviceid};
-
 					if (defined $+{servicerestriction}) {
 						$service_id = $+{servicerestriction};
 					}
@@ -265,7 +264,6 @@ sub process {
 
 					for my $i (0 .. $#stops) {
 						if ($FT{$timingpattern}[$i] ne '|' and $FT{$timingpattern}[$i] ne '$' and $FT{$timingpattern}[$i] ne '-') {
-
 							my $sth = $dbh->prepare('INSERT OR REPLACE INTO stop_times (trip_id, arrival_time, departure_time, stop_id, stop_sequence) values (?, ?, ?, ?, ?)');
 
 							$minutes = $minutes + $FT{$timingpattern}[$i];
@@ -287,17 +285,17 @@ sub process {
 									$dep_hours++;
 								}
 								$dep_minutes = sprintf("%02d", $dep_minutes);
-	#							print "$process{tripname}\t$hours:$minutes\t$dep_hours:$dep_minutes\t$stops[$i]\t$i\n";
+#								print "$process{tripname}\t$hours:$minutes\t$dep_hours:$dep_minutes\t$stops[$i]\t$i\n";
 		 						print $log ("\t$i\t$FT{$timingpattern}[$i]\tFW LayO\t $stops[$i] at $hours:$minutes leave $dep_hours:$dep_minutes\n");
 								$departure_time = "$dep_hours:$dep_minutes:00";
 							# if the above procedure has been performed, the next iteration is skipped
 							} elsif ($i > 1 and $stops[$i] eq $stops[$i-1] and $FT{$timingpattern}[$i-1] ne '-' and $FT{$timingpattern}[$i-1] ne '$' and $FT{$timingpattern}[$i-1] ne '|') {
 								print $log ("\t$i\t$FT{$timingpattern}[$i]\tFW next\t $stops[$i]\n");
-								next; 
+								next;
 							# regular arrival/departure handling
 							} else {
 							$departure_time = $arrival_time;
-	#						print $log ("$process{tripname}\t$hours:$minutes\t$hours:$minutes\t$stops[$i]\t$i\n");
+#							print $log ("$process{tripname}\t$hours:$minutes\t$hours:$minutes\t$stops[$i]\t$i\n");
 							print $log ("\t$i\t$FT{$timingpattern}[$i]\tFW Stop\t $stops[$i] at $hours:$minutes\n");
 
 							}
@@ -308,16 +306,14 @@ sub process {
 							print $log ("\t$i\t$FT{$timingpattern}[$i]\tFW Skip\t $stops[$i]\n");
 						}
 					}
-
-				} 
-				else { print "Trip handling failed! $line\n"; 
+				} else {
+					print "Trip handling failed! $line\n";
 				}
 			}
 
 			# -------------------------
-		  # END OF TRIPS
-		  # -------------------------
-
+			# END OF TRIPS
+			# -------------------------
 
 			# -------------------------
 			# HEADSIGN HANDLING
@@ -339,14 +335,11 @@ sub process {
 						if ($+{startingstop} == 1) {
 							my $sth = $dbh->prepare('UPDATE trips set trip_headsign = ? where trip_id LIKE ?');
 							$sth->execute($+{headsign},$tripid);
-						}
-						else {
+						} else {
 							my $sth = $dbh->prepare('UPDATE stop_times set stop_headsign = ? where trip_id LIKE ? and stop_sequence >= ?');
 							$sth->execute($+{headsign},$tripid, $+{startingstop}-1);
 						}
-					}
-
-					else {
+					} else {
 						print $log "Headsign for trip $process{tripname}$+{direction}$+{serviceid}%$+{tid}: $+{headsign} (starting at $+{startingstop})\n";
 						$tripid = $process{tripname} . $+{direction} . $+{serviceid} . "%" . $+{tid};
 						# discriminate: if startingstop is 1 (first stop), set headsign for routeuid
@@ -354,15 +347,14 @@ sub process {
 						if ($+{startingstop} == 0) {
 							my $sth = $dbh->prepare('UPDATE trips set trip_headsign = ? where trip_id LIKE ?');
 							$sth->execute($+{headsign},$tripid);
-						}
-						else {
+						} else {
 							my $sth = $dbh->prepare('UPDATE stop_times set stop_headsign = ? where trip_id LIKE ? and stop_sequence >= ?');
 							$sth->execute($+{headsign},$tripid, $+{startingstop}-1);
-						}					
+						}
 					}
+				} else {
+					print "Headsign handling failed! $line\n";
 				}
-				else { print "Headsign handling failed! $line\n"; }
-
 			}
 
 			# -------------------------
@@ -375,13 +367,10 @@ sub process {
 			# ---------------------------------
 
 			elsif ($line =~ s/^BU//) {
-
 				if ($line =~ /(?<direction>[HR])\s\"(?<shortid>.*)\"\s\"(?<routetype>.*)\"\s(\".*\")\s\"(?<longid1>.*)\"\s\"(?<longid2>.*)\"\s(\".*\")\s(\".*\")\s[0-9]*[NY]/) {
-
 					if (not defined $process{textbalang}) {
 						$route_long_name = $+{longid1} . $+{longid2};
-					}
-					else {
+					} else {
 						$route_long_name = $process{textbalang};
 					}
 
@@ -400,11 +389,9 @@ sub process {
 						case "Fahrradbus"		{ $route_type = 3 } #FIXME
 						else					{ $route_type = 99}
 					}
-
+				} else {
+					print "Bus description handling failed! $line\n";
 				}
-				else { print "Bus description handling failed! $line\n";
-				}
-
 			}
 
 			# -------------------------------------
@@ -418,8 +405,7 @@ sub process {
 		$dbh->commit;
 
 		close FILE;
-	}
-	else {
+	} else {
 		warn "Could not open file $file $!";
 	}
 }
@@ -428,7 +414,6 @@ sub process {
 # END OF FILE PROCESSING SUBROUTINE
 # ---------------------------------
 
-
 # ---------------------------------
 # CLEANING UP!
 # ---------------------------------
@@ -436,39 +421,32 @@ sub process {
 close $log;
 $dbh->disconnect();
 print "Database closed. ";
-
 print "Everything done. Bye!\n";
 
-
-
-
-sub dbconnect {
-	# --------------------
+# --------------------
 # CONNECT TO DATABASE
 # --------------------
+sub dbconnect {
+	my $db_folder = "build/data";
+	make_path($db_folder);
 
-my $driver   = "SQLite"; 
-my $database = "diva2gtfs.db";
-my $dsn = "DBI:$driver:dbname=$database";
-my $userid = "";
-my $password = "";
-$dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 }) 
-                      or die $DBI::errstr;
+	my $driver   = "SQLite";
+	my $database = "$db_folder/diva2gtfs.db";
+	my $dsn = "DBI:$driver:dbname=$database";
+	my $userid = "";
+	my $password = "";
+	$dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 })
+	                      or die $DBI::errstr;
 
-my $divadatabase = "divadata.db";
-my $divadsn = "DBI:$driver:dbname=$divadatabase";
-$divadbh = DBI->connect($divadsn, $userid, $password, { RaiseError => 1 }) 
-	                    or die $DBI::errstr;
+	my $divadatabase = "$db_folder/divadata.db";
+	my $divadsn = "DBI:$driver:dbname=$divadatabase";
+	$divadbh = DBI->connect($divadsn, $userid, $password, { RaiseError => 1 })
+		                    or die $DBI::errstr;
 
-# sacrificing security for speed
-$dbh->{AutoCommit} = 0;
-$dbh->do( "COMMIT; PRAGMA synchronous=OFF; BEGIN TRANSACTION" );
+	# sacrificing security for speed
+	$dbh->{AutoCommit} = 0;
+	$dbh->do( "COMMIT; PRAGMA synchronous=OFF; BEGIN TRANSACTION" );
 
 	print "Opened database successfully\n";
-
-# --------------------------
-# END OF DATABASE GEDOENS
-# --------------------------
-
 }
 

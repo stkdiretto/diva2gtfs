@@ -46,9 +46,9 @@ GetOptions	(	"database=s"	=>	\$Database,
 
 dbconnect();
 
-	my $daysth = $dbh->prepare('SELECT calendar.service_id, monday, tuesday, wednesday, thursday, friday, saturday, sunday, dmonday, dtuesday, dwednesday, dthursday, dfriday, dsaturday, dsunday 
-FROM calendar 
-		LEFT JOIN (SELECT service_id, date AS dmonday FROM calendar_dates WHERE date=strftime("%Y%m%d",date("now", "weekday 1")) AND exception_type = "2") AS cmonday ON cmonday.service_id = calendar.service_id 
+	my $daysth = $dbh->prepare('SELECT calendar.service_id, monday, tuesday, wednesday, thursday, friday, saturday, sunday, dmonday, dtuesday, dwednesday, dthursday, dfriday, dsaturday, dsunday
+FROM calendar
+		LEFT JOIN (SELECT service_id, date AS dmonday FROM calendar_dates WHERE date=strftime("%Y%m%d",date("now", "weekday 1")) AND exception_type = "2") AS cmonday ON cmonday.service_id = calendar.service_id
 		LEFT JOIN (SELECT service_id, date AS dtuesday FROM calendar_dates WHERE date=strftime("%Y%m%d",date("now", "weekday 2")) AND exception_type = "2") AS ctuesday ON ctuesday.service_id = calendar.service_id
 		LEFT JOIN (SELECT service_id, date AS dwednesday FROM calendar_dates WHERE date=strftime("%Y%m%d",date("now", "weekday 3")) AND exception_type = "2") AS cwednesday ON cwednesday.service_id = calendar.service_id
 		LEFT JOIN (SELECT service_id, date AS dthursday FROM calendar_dates WHERE date=strftime("%Y%m%d",date("now", "weekday 4")) AND exception_type = "2") AS cthursday ON cthursday.service_id = calendar.service_id
@@ -56,7 +56,7 @@ FROM calendar
 		LEFT JOIN (SELECT service_id, date AS dsaturday FROM calendar_dates WHERE date=strftime("%Y%m%d",date("now", "weekday 6")) AND exception_type = "2") AS csaturday ON csaturday.service_id = calendar.service_id
 		LEFT JOIN (SELECT service_id, date AS dsunday FROM calendar_dates WHERE date=strftime("%Y%m%d",date("now", "weekday 0")) AND exception_type = "2") AS csunday ON csunday.service_id = calendar.service_id');
 	$daysth->execute();
-		
+
 	while (my $servicerow = $daysth->fetchrow_hashref()) {
 		if ($servicerow->{monday} eq "1" and not defined $servicerow->{cmonday}) {
 			$Service{$servicerow->{service_id}} = $Monday->strftime($Strf);
@@ -98,14 +98,14 @@ while (my $row = $sth->fetchrow_hashref()) {
 	}
 	elsif (defined $row->{prevdate}) {
 		$Trips{$trip}{date} = $row->{prevdate};
-	} 
+	}
 	elsif (defined $Service{$Trips{$trip}{service_id}}) {
 		$Trips{$trip}{date} = $Service{$Trips{$trip}{service_id}};
 	}
 	else {
 		print "ERROR! NO DATE FOUND FOR $trip! Use another startdate, maybe?\n";
 	}
-	
+
 	my $stopsth = $dbh->prepare('SELECT stop_id, departure_time FROM stop_times WHERE trip_id = ?');
 	$stopsth->execute($trip);
 
@@ -115,16 +115,16 @@ while (my $row = $sth->fetchrow_hashref()) {
 		push (@{$Trips{$trip}{departure}}, $stoprow->{departure_time});
 		$Trips{$trip}{stopcount}++;
 	}
-	
-	
+
+
 	my $deststh = $dbh->prepare('SELECT f.stop_id AS start, MIN(f.departure_time) AS triptime, MAX (d.departure_time), d.stop_id AS destination, trips.service_id AS service_id FROM stop_times AS f JOIN stop_times as d ON f.trip_id = d.trip_id JOIN trips ON d.trip_id = trips.trip_id WHERE f.trip_id = ? AND d.trip_id = ?');
 	$deststh->execute($trip,$trip);
-	
+
 	while (my $destrow = $deststh->fetchrow_hashref()) {
 		$Trips{$trip}{start} = $destrow->{start};
 		$Trips{$trip}{triptime} = $destrow->{triptime};
 		$Trips{$trip}{destination} = $destrow->{destination};
-		
+
 	}
 }
 
@@ -137,7 +137,7 @@ for my $currentTrip (keys %Trips) {
 		$Trips{$currentTrip}{headsign} = shape_request($currentTrip);
 		for my $comparisonTrip (keys %Trips) {
 			if ($Trips{$currentTrip}{stops} ~~ $Trips{$comparisonTrip}{stops} and $currentTrip ne $comparisonTrip) {
-				if ($Debug) { 
+				if ($Debug) {
 					print "Trip $comparisonTrip matches current stop pattern.\n";
 					print join(", ", @{ $Trips{$currentTrip}{stops} });
 					print "\n";
@@ -191,18 +191,18 @@ sub shape_request {
 	if (defined $StopIDprefix) {
 		$destination = $StopIDprefix . $destination;
 	}
-	
+
 	my $via = $Trips{$shapetrip}{stops}[$Trips{$shapetrip}{stopcount}/2];
 	$via =~s/$StopIDregex/$1/;
 	if (defined $StopIDprefix) {
 		$via = $StopIDprefix . $via;
 	}
-	
+
 	my $triptime = $Trips{$shapetrip}{triptime};
 	$triptime =~ /([0-9]{2})(.*)/;
 	my $hour = $1;
 	my $restoftime = $2;
-	
+
 	if ($hour > 23) {
 		$hour = $hour - 24;
 		$triptime = $hour. $restoftime;
@@ -211,8 +211,8 @@ sub shape_request {
 		$tempdate->add ( days => 1 );
 		$Trips{$shapetrip}{date} = $tempdate->strftime($Strf);
 	}
-	
-	
+
+
 	my $requesturl = $EFAendpoint .
 		"?itdDate=" . $Trips{$shapetrip}{date} .
 		"&itdTime=" . $triptime .
@@ -228,7 +228,7 @@ sub shape_request {
 		"&coordListOutputFormat=STRING" .
 		"&ptOptionsActive=1&maxChanges=0";
 		if ($Debug) { print "$requesturl\n"; }
-		
+
 	my $efaresult = XML::LibXML->load_xml( location => $requesturl );
 
 
@@ -246,7 +246,7 @@ sub shape_request {
 			if (length($coordArray[$ca])>4 and length($coordArray[$ca+1])>4) {
 				my $longitude = $coordArray[$ca];
 				my $latitude = $coordArray[$ca+1];
-			
+
 				my $shapesth = $dbh->prepare('INSERT INTO shapes (shape_id, shape_pt_lat, shape_pt_lon, shape_pt_sequence) VALUES (?,?,?,?)');
 				$shapesth->execute($Trips{$shapetrip}{shape_id},$latitude,$longitude,$sequence);
 			}
@@ -267,16 +267,16 @@ sub shape_request {
 # HANDLE DATABASE CONNECTION TO GTFS FEED
 
 sub dbconnect {
-	my $driver   = "SQLite"; 
+	my $driver = "SQLite";
 	my $dsn = "DBI:$driver:dbname=$Database";
 	my $userid = "";
 	my $password = "";
-	$dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 }) 
+	$dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 })
 		                    or die $DBI::errstr;
 	$dbh->{AutoCommit} = 0;
-	#$dbh->do( "PRAGMA synchronous=OFF" );
+	#$dbh->do( "COMMIT; PRAGMA synchronous=OFF; BEGIN TRANSACTION" );
 
-		print "Opened database successfully\n";
+	print "Opened database successfully\n";
 }
 
 sub dbdisconnect {

@@ -4,6 +4,7 @@ use warnings;
 use strict;
 #use DateTime;
 use DBI;
+use File::Path qw(make_path);
 
 my $dbh;
 my $divadbh;
@@ -24,14 +25,14 @@ sub findtransfers {
 
 	my $sth = $divadbh->prepare('SELECT hst_nr_an, linie_erg_an, richt_an, wttyp_an, zeit_von_an, zeit_bis_an, hst_nr_ab, linie_erg_ab, richt_ab, wttyp_ab, zeit_von_ab, zeit_bis_ab, sitz_blb FROM TransferProtection');
 	$sth->execute();
-	
+
 	while (my $row = $sth->fetchrow_hashref()) {
-	
+
 		# In DIVA, the time frames are calculated in seconds from midnight. I introduced a little
 		# subroutine to convert those seconds into a hh:mm:ss string
 		my $from_starttime = secondstogtfstime($row->{zeit_von_an});
 		my $from_endtime = secondstogtfstime($row->{zeit_bis_an});
-	
+
 		my $to_starttime = secondstogtfstime($row->{zeit_von_ab});
 		my $to_endtime = secondstogtfstime($row->{zeit_bis_ab});
 
@@ -49,12 +50,12 @@ sub findtransfers {
 		}
 		my $from_stop = $row->{hst_nr_an};
 		my $to_stop = $row->{hst_nr_ab};
-	
+
 		# If wttyp_an or wttyp_ab is A, this transfer is valid for _all_ day types starting/ending with this
 		# route/stop combination within the given time frame.
 		if ($row->{wttyp_an} eq "A") {
 			# ALL day types! First, from day type 0.
-			
+
 			my %job = ('starttrip' => $startroute.$row->{richt_an}."0%", 'from_stop' => $from_stop, 'from_starttime' => $from_starttime ,'from_endtime' => $from_endtime, 'to_stop' => $to_stop, 'to_starttime' => $to_starttime, 'to_endtime' => $to_endtime, 'block' => $row->{sitz_blb});
 			if ($row->{wttyp_ab} eq "A") {
 				$job{endtrip} = $endroute.$row->{richt_ab}."0%";
@@ -103,7 +104,6 @@ sub findtransfers {
 			print "ERROR: THIS NEEDS FIXME\n"; #FIXME
 		}
 		else { #
-
 			my $starttrip = $startroute.$row->{richt_an}.$row->{wttyp_an}."%";
 			my %job = ('starttrip' => $starttrip, 'from_stop' => $from_stop, 'from_starttime' => $from_starttime ,'from_endtime' => $from_endtime, 'to_stop' => $to_stop, 'to_starttime' => $to_starttime, 'to_endtime' => $to_endtime, 'block' => $row->{sitz_blb});
 
@@ -128,23 +128,21 @@ sub findtransfers {
 #  / \ WARNING WARNING WARNING WARNING WARNING
 # / ! \ The following code is a complete and utter mess. It is slow as hell and in dire need of better SQL requests
 # -----  WARNING WARNING WARNING WARNING WARNING
-# TODO FIXME 
+# TODO FIXME
 
 sub messyblockhandler {
-
 		my %messyparams = @_;
 
-			print ("Transfer from $messyparams{starttrip} to $messyparams{endtrip} at $messyparams{from_stop} to $messyparams{to_stop} from $messyparams{from_starttime}, $messyparams{from_endtime} to $messyparams{to_starttime}, $messyparams{to_endtime}, Block: ", $messyparams{block},"\n");
-
+		print ("Transfer from $messyparams{starttrip} to $messyparams{endtrip} at $messyparams{from_stop} to $messyparams{to_stop} from $messyparams{from_starttime}, $messyparams{from_endtime} to $messyparams{to_starttime}, $messyparams{to_endtime}, Block: ", $messyparams{block},"\n");
 
 		my $sth = $dbh->prepare('select trips.trip_id AS trip_id, arrival_time, stop_id, block_id, service_id from trips join stop_times on trips.trip_id = stop_times.trip_id where trips.trip_id like ? ESCAPE "\" and arrival_time >= ? and arrival_time <= ? and stop_id LIKE ?');
 		$sth->execute($messyparams{starttrip}, $messyparams{from_starttime},$messyparams{from_endtime}, $messyparams{from_stop}."%");
-		
+
 		my %block_identifier;
 		my %triptransfer;
-		
+
 		while (my $arrival_triprow = $sth->fetchrow_hashref()) {
-			
+
 			my $current_arrival_time = $arrival_triprow->{arrival_time};
 			my $current_arrival_trip = $arrival_triprow->{trip_id};
 			my $current_arrival_stop = $arrival_triprow->{stop_id};
@@ -166,17 +164,20 @@ sub messyblockhandler {
 			# departures between the inbound trip's arrival time and the end of the transfer time frame.
 			# TODO is this better?
 			# TODO select trip_id, min(arrival_time) from stop_times where trip_id like ? ESCAPE "\" and arrival_time >= ? and arrival_time <= ? and stop_id LIKE ?;
-			
-			my $sth = $dbh->prepare('select trips.trip_id, arrival_time, stop_id from trips join stop_times on trips.trip_id = stop_times.trip_id where trips.trip_id like ? ESCAPE "\" and arrival_time >= ? and arrival_time <= ? and stop_id LIKE ? and service_id = ? order by arrival_time asc limit 1;
-');
+
+			my $sth = $dbh->prepare('SELECT trips.trip_id, arrival_time, stop_id
+			FROM trips
+			JOIN stop_times ON trips.trip_id = stop_times.trip_id
+			WHERE trips.trip_id LIKE ? ESCAPE "\" AND arrival_time >= ? AND arrival_time <= ? AND stop_id LIKE ? AND service_id = ?
+			ORDER BY arrival_time ASC
+			LIMIT 1;');
 
 			$sth->execute($messyparams{endtrip}, $current_arrival_time,$messyparams{to_endtime}, $messyparams{from_stop}."%", $arrival_triprow->{service_id});
-			
+
 			while (my $departure_triprow = $sth->fetchrow_hashref()) {
-			
 				my $current_departure_trip = $departure_triprow->{trip_id};
 				my $current_departure_stop = $departure_triprow->{stop_id};
-				
+
 				# Transfer by staying on the vehicle
 				if (($messyparams{block} eq "Y") or ($messyparams{block} eq "y")) {
 					$block_identifier{$current_departure_trip} = $block_identifier{$current_arrival_trip};
@@ -188,9 +189,8 @@ sub messyblockhandler {
 				$transfersth->execute($current_arrival_stop, $current_departure_stop, 1, $current_departure_trip, $current_arrival_trip);
 				}
 			}
-			
 		}
-		
+
 		# Finally, if the current request was for block transfers, use the temporary hash
 		# to write everything to the GTFS database!
 		if ($messyparams{block} eq "Y") {
@@ -202,7 +202,6 @@ sub messyblockhandler {
 		}
 
 		$dbh->commit();
-		
 }
 
 #--------------------------------------------------------------------
@@ -220,21 +219,24 @@ sub secondstogtfstime {
 # --------------------
 
 sub dbconnect {
-	my $driver   = "SQLite"; 
-	my $database = "diva2gtfs.db";
+	my $db_folder = "build/data";
+	make_path($db_folder);
+
+	my $driver = "SQLite";
+	my $database = "$db_folder/diva2gtfs.db";
 	my $dsn = "DBI:$driver:dbname=$database";
 	my $userid = "";
 	my $password = "";
-	$dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 }) 
+	$dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 })
 		                    or die $DBI::errstr;
 	$dbh->{AutoCommit} = 0;
 	$dbh->do( "COMMIT; PRAGMA synchronous=OFF; BEGIN TRANSACTION" );
 
-		print "Opened database successfully\n";
+	print "Opened database successfully\n";
 
-	my $divadatabase = "divadata.db";
+	my $divadatabase = "$db_folder/divadata.db";
 	my $divadsn = "DBI:$driver:dbname=$divadatabase";
-	$divadbh = DBI->connect($divadsn, $userid, $password, { RaiseError => 1 }) 
+	$divadbh = DBI->connect($divadsn, $userid, $password, { RaiseError => 1 })
 		                    or die $DBI::errstr;
 }
 

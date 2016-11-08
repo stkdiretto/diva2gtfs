@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use utf8;
 use DBI;
+use File::Path qw(make_path);
 use Text::ParseWords;
 
  use open ':encoding(windows-1252)';
@@ -18,19 +19,22 @@ my $line;
 # CONNECT TO DATABASE
 # --------------------
 
-my $driver   = "SQLite"; 
-my $database = "divadata.db";
+my $db_folder = "build/data";
+make_path($db_folder);
+
+my $driver   = "SQLite";
+my $database = "$db_folder/divadata.db";
 my $dsn = "DBI:$driver:dbname=$database";
 my $userid = "";
 my $password = "";
-my $divadbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 }) 
+my $divadbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 })
                       or die $DBI::errstr;
 
 # sacrificing security for speed
 $divadbh->{AutoCommit} = 0;
 $divadbh->do( "COMMIT; PRAGMA synchronous=OFF; BEGIN TRANSACTION" );
 
-	print "Opened database successfully\n";
+print "Opened database successfully\n";
 
 
 # --------------------------
@@ -51,7 +55,6 @@ foreach my $file (@ARGV) {
 # -----------------------------------------
 
 sub process {
-
 	my $currentTable;
 
 	my $arg = shift;
@@ -63,10 +66,10 @@ sub process {
 	foreach $line (<FILE>) {
 		chomp $line;
 
-		if ($line =~ s/tbl;//) {	
+		if ($line =~ s/tbl;//) {
 			$currentTable = $line;
 			print "Filling table: $currentTable\n";
-		}	
+		}
 		elsif ($line =~ s/rec;//) {
 
 			my @currentRecord = quotewords(";", 0, $line);
@@ -101,5 +104,4 @@ sub process {
 
 $divadbh->disconnect();
 print "Database closed. ";
-
 print "Everything done. Bye!\n";
