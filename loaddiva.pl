@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use utf8;
 use DBI;
+use File::Basename;
 use File::Path qw(make_path);
 use Text::ParseWords;
 
@@ -55,13 +56,18 @@ foreach my $file (@ARGV) {
 # -----------------------------------------
 
 sub process {
-	my $currentTable;
-
 	my $arg = shift;
+	my $currentTable;
+	my $filename = basename($arg);
+	my $opbranch;
+
 	open (FILE, "<", "$arg") or die("Could not open inputfile: $!");
-	$arg =~ /.*\.(.*)/;
-	my $opbranch = $1;
-	print ("Working on project $opbranch\n");
+	if ($filename =~ /.*\.(.*)/) {
+		$opbranch = $1;
+	} else {
+		$opbranch = $filename;
+	}
+	print ("Working on project \"$opbranch\"\n");
 
 	foreach $line (<FILE>) {
 		chomp $line;
