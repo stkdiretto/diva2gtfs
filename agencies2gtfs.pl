@@ -20,6 +20,7 @@ my $line;
 # DEFINE I/O FILES
 my $log;
 my $log_folder = "build/log";
+make_path($log_folder);
 
 # --------------------
 # CONNECT TO DATABASE
@@ -46,7 +47,6 @@ print "Opened database successfully\n";
 # END OF DATABASE GEDOENS
 # --------------------------
 
-make_path($log_folder);
 open ($log, ">","$log_folder/agencies2gtfs.log") or die "Something terrible happened while opening my log file: $!";
 #open ($log, ">","/dev/null") or die "Something terrible happened while opening my log file: $!";
 
