@@ -3,6 +3,7 @@
 use strict;
 use warnings;
 use DBI;
+use File::Path qw(make_path);
 use Getopt::Long;
 
 dbconnect();
@@ -108,19 +109,21 @@ sub clearhandler {
 # --------------------
 
 sub dbconnect {
-	my $driver   = "SQLite"; 
-	my $database = "diva2gtfs.db";
+	my $db_folder = "build/data";
+	make_path($db_folder);
+
+	my $driver   = "SQLite";
+	my $database = "$db_folder/diva2gtfs.db";
 	my $dsn = "DBI:$driver:dbname=$database";
 	my $userid = "";
 	my $password = "";
-	$dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 }) 
+	$dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 })
 		                    or die $DBI::errstr;
+	print "Opened database successfully\n";
 
-		print "Opened database successfully\n";
-
-	my $divadatabase = "divadata.db";
+	my $divadatabase = "$db_folder/divadata.db";
 	my $divadsn = "DBI:$driver:dbname=$divadatabase";
-	$divadbh = DBI->connect($divadsn, $userid, $password, { RaiseError => 1 }) 
+	$divadbh = DBI->connect($divadsn, $userid, $password, { RaiseError => 1 })
 		                    or die $DBI::errstr;
 }
 
@@ -200,8 +203,6 @@ sub creategtfs {
 	$dbh->do("CREATE TABLE IF NOT EXISTS feed_info (feed_publisher_name TEXT, feed_publisher_url TEXT, feed_lang TEXT, feed_start_date INTEGER, feed_end_date INTEGER, feed_version TEXT)");
 }
 
-
-
 sub cleargtfs {
 	dropgtfs();
 	creategtfs();
@@ -250,7 +251,7 @@ sub creatediva_stops{
 	$divadbh->do("CREATE TABLE IF NOT EXISTS StopPlatformKoord ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, plan VARCHAR(4), status CHAR, x INTEGER, y INTEGER, z INTEGER, disp_x INTEGER, disp_y INTEGER, text_x INTEGER, text_y INTEGER, input TEXT)");
 	$divadbh->do("CREATE TABLE IF NOT EXISTS Stop_GeoRefKoord ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, GisName VARCHAR(4), GisVm INTEGER, Koord_x INTEGER, Koord_y INTEGER, input TEXT)");
 	$divadbh->do("CREATE TABLE IF NOT EXISTS Stop_attr ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, attr VARCHAR(3), input TEXT)");
-	$divadbh->do("CREATE TABLE IF NOT EXISTS Stop_bzn ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, bz VARCHAR(2), hstmit VARCHAR(30), hstohne VARCHAR(30), logo VARCHAR(40), hstgemeinde VARCHAR(30), hstgemeindemitOrt VARCHAR(30), pszhstmit VARCHAR(1024), pszhstohne VARCHAR(1024), pszhstgemeinde VARCHAR(1024), pszhstgemeindemitOrt VARCHAR(1024), input TEXT, 
+	$divadbh->do("CREATE TABLE IF NOT EXISTS Stop_bzn ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, bz VARCHAR(2), hstmit VARCHAR(30), hstohne VARCHAR(30), logo VARCHAR(40), hstgemeinde VARCHAR(30), hstgemeindemitOrt VARCHAR(30), pszhstmit VARCHAR(1024), pszhstohne VARCHAR(1024), pszhstgemeinde VARCHAR(1024), pszhstgemeindemitOrt VARCHAR(1024), input TEXT,
 	PRIMARY KEY (_FK__AutoKey_,_FK_ARR_IDX, input))");
 	$divadbh->do("CREATE TABLE IF NOT EXISTS Stop_georef ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, id INTEGER, abst_von INTEGER, abst_bis INTEGER, seite CHAR, status CHAR, quell_name VARCHAR(4), strassenname VARCHAR(1024), GisVm INTEGER, input TEXT,
 	PRIMARY KEY (_FK__AutoKey_,_FK_ARR_IDX, input))");
@@ -261,7 +262,7 @@ sub creatediva_stops{
 	$divadbh->do("CREATE TABLE IF NOT EXISTS Stop_hst_alias_orte ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, szAliasgkz VARCHAR(8),
  szAliasortsname VARCHAR(1024), input TEXT)");
 	$divadbh->do("CREATE TABLE IF NOT EXISTS Stop_hst_gebiet ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, gebiet INTEGER, gebietsgruppierung INTEGER, input TEXT)");
-	$divadbh->do("CREATE TABLE IF NOT EXISTS Stop_hst_koord ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, plan VARCHAR(4), status CHAR, x INTEGER, y INTEGER, z INTEGER, disp_x INTEGER, disp_y INTEGER, text_x INTEGER, text_y INTEGER, input TEXT, 
+	$divadbh->do("CREATE TABLE IF NOT EXISTS Stop_hst_koord ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, plan VARCHAR(4), status CHAR, x INTEGER, y INTEGER, z INTEGER, disp_x INTEGER, disp_y INTEGER, text_x INTEGER, text_y INTEGER, input TEXT,
 	PRIMARY KEY (_FK__AutoKey_, _FK_ARR_IDX, input))");
 	$divadbh->do("CREATE TABLE IF NOT EXISTS Stop_hst_mast ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, _AutoKey_ INTEGER, mast INTEGER, mastbez VARCHAR(17), mastkbez VARCHAR(5), eigenschaften TINYINT, art CHAR, niveau INTEGER, uebergangspunkt INTEGER, uebergangsnummer INTEGER, a_koord INTEGER, a_georef INTEGER, a_GisNetze INTEGER, m_lGISVerkehrsmittel INTEGER, m_nSortierschluessel INTEGER, m_pFremdschluessel VARCHAR(1024), SpaVlpUsage TINYINT, GisRegionLayer VARCHAR(99), GisRegionID INTEGER, ModInfo__Time INTEGER, ModInfo__Flag INTEGER, input TEXT,
 	 PRIMARY KEY (_FK__AutoKey_,_FK_ARR_IDX, input))");
@@ -270,7 +271,7 @@ sub creatediva_stops{
 	$divadbh->do("CREATE TABLE IF NOT EXISTS Stop_lZhst ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, Zhst INTEGER, input TEXT)");
 	$divadbh->do("CREATE TABLE IF NOT EXISTS Stop_lokalNete ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, lokalNetz VARCHAR(3), input TEXT)");
 	$divadbh->do("CREATE TABLE IF NOT EXISTS Stop_pq ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, pq_b VARCHAR(2), pq_z VARCHAR(2), input TEXT)");
-	$divadbh->do("CREATE TABLE IF NOT EXISTS Stop_tzonen ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, tzonen VARCHAR(4), input TEXT, 
+	$divadbh->do("CREATE TABLE IF NOT EXISTS Stop_tzonen ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, tzonen VARCHAR(4), input TEXT,
 	PRIMARY KEY (_FK__AutoKey_,_FK_ARR_IDX, input))");
 	$divadbh->do("CREATE TABLE IF NOT EXISTS Stop_umgeb_plan ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, art INTEGER, dname VARCHAR(256), hst_x INTEGER, hst_y INTEGER, input TEXT)");
 	$divadbh->do("CREATE TABLE IF NOT EXISTS Zus_Stop_Info ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, StoppingPointType1 INTEGER, strHstBerSteigNummer VARCHAR(1024), strZusInfoName VARCHAR(1024), strWert VARCHAR(1024), lVerwendungszweck INTEGER, input TEXT)");
@@ -282,7 +283,7 @@ sub creatediva_lnrlit {
 	$divadbh->do("CREATE TABLE IF NOT EXISTS TabelleBuchPraesentationen ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, _AutoKey_ INTEGER, datv INTEGER, datb INTEGER, beschreibung VARCHAR(100), sv_gruppe VARCHAR(3), flags INTEGER, input TEXT)");
 	$divadbh->do("CREATE TABLE IF NOT EXISTS TabelleLinienPraesentationen ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, _AutoKey_ INTEGER, datv INTEGER, datb INTEGER, dateiname VARCHAR(1024), beschreibung VARCHAR(100), flags INTEGER, input TEXT)");
 	$divadbh->do("CREATE TABLE IF NOT EXISTS TabelleLnrlit ( _AutoKey_ INTEGER, uvz VARCHAR(20), lierg VARCHAR(6), kbez VARCHAR(3), vm INTEGER, textpfp VARCHAR(5), tar_bes CHAR, aktiv CHAR, ahf CHAR, bedverb CHAR, db CHAR, puffer_zeit INTEGER, ia_tn VARCHAR(3), fv CHAR, linieGeoreferenzieren_yn CHAR, buch_yn CHAR, linieOhneEFAFahrten CHAR, ind_fahrrad_regel VARCHAR(2), cZugNrStattFSchl CHAR, bLVP BOOL, SpaVlpUsage TINYINT, TextBAlang VARCHAR(256), LNRLITAttribute INTEGER, input TEXT)");
-	$divadbh->do("CREATE TABLE IF NOT EXISTS TabelleReferenzLinien ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, _AutoKey_ INTEGER, eLinRefTyp INTEGER, m_strRefLinie VARCHAR(6), input TEXT)");	
+	$divadbh->do("CREATE TABLE IF NOT EXISTS TabelleReferenzLinien ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, _AutoKey_ INTEGER, eLinRefTyp INTEGER, m_strRefLinie VARCHAR(6), input TEXT)");
 }
 
 sub creatediva_servicerestrictions {
@@ -350,7 +351,7 @@ sub dropdiva_lnrlit {
 	$divadbh->do("DROP TABLE IF EXISTS TabelleBuchPraesentationen");
 	$divadbh->do("DROP TABLE IF EXISTS TabelleLinienPraesentationen");
 	$divadbh->do("DROP TABLE IF EXISTS TabelleLnrlit");
-	$divadbh->do("DROP TABLE IF EXISTS TabelleReferenzLinien");	
+	$divadbh->do("DROP TABLE IF EXISTS TabelleReferenzLinien");
 }
 
 sub dropdiva_servicerestrictions {
@@ -391,7 +392,6 @@ sub cleardiva {
 	dropdiva();
 	creatediva();
 }
-
 
 sub disconnect {
 	$dbh->disconnect();

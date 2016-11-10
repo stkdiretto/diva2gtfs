@@ -4,9 +4,9 @@ use strict;
 use warnings;
 use utf8;
 use DBI;
+use File::Path qw(make_path);
 use Text::ParseWords;
-
- use open ':encoding(windows-1252)';
+use open ':encoding(windows-1252)';
 
 # take care of windows newlines
 #$/ = "\n";
@@ -19,32 +19,36 @@ my $line;
 
 # DEFINE I/O FILES
 my $log;
-
+my $log_folder = "build/log";
 
 # --------------------
 # CONNECT TO DATABASE
 # --------------------
 
-my $driver   = "SQLite"; 
-my $database = "diva2gtfs.db";
+my $db_folder = "build/data";
+make_path($db_folder);
+
+my $driver   = "SQLite";
+my $database = "$db_folder/diva2gtfs.db";
 my $dsn = "DBI:$driver:dbname=$database";
 my $userid = "";
 my $password = "";
-my $dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 }) 
+my $dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 })
                       or die $DBI::errstr;
 
 # sacrificing security for speed
 $dbh->{AutoCommit} = 0;
-$dbh->do( "PRAGMA synchronous=OFF" );
+$dbh->do( "COMMIT; PRAGMA synchronous=OFF; BEGIN TRANSACTION" );
 
-	print "Opened database successfully\n";
+print "Opened database successfully\n";
 
 # --------------------------
 # END OF DATABASE GEDOENS
 # --------------------------
 
-	open ($log, ">","log_agency.txt") or die "Something terrible happened while opening my log file: $!";
-#	open ($log, ">","/dev/null") or die "Something terrible happened while opening my log file: $!";
+make_path($log_folder);
+open ($log, ">","$log_folder/agencies2gtfs.log") or die "Something terrible happened while opening my log file: $!";
+#open ($log, ">","/dev/null") or die "Something terrible happened while opening my log file: $!";
 
 # ------------------------------------------
 # ITERATE OVER ALL FILES PASSED AS ARGUMENTS
@@ -61,7 +65,6 @@ foreach my $file (@ARGV) {
 # -----------------------------------------
 
 sub process {
-	open ($log, ">>","log_agency.txt") or die "Something even more terrible happened while opening my log file: $!";
 	my $arg = shift;
 	open (FILE, "<", "$arg") or die("Could not open inputfile: $!");
 	print $log "Now working on $arg\n";
@@ -72,9 +75,7 @@ sub process {
 			print "parsing: $+{agency_id},$+{agency_name}\n";
 			my $sth = $dbh->prepare('INSERT INTO agency values (?, ?, ?, ?, ?, ?, ?)');
 			$sth->execute($+{agency_id},$+{agency_name},$agency_url,$agency_timezone,$agency_lang, undef, undef);
-
 		}
-
 	}
 
 	$dbh->commit;
@@ -94,5 +95,4 @@ sub process {
 close $log;
 $dbh->disconnect();
 print "Database closed. ";
-
 print "Everything done. Bye!\n";

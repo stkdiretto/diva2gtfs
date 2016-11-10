@@ -18,10 +18,11 @@ $ apt-get install perl proj sqlite3
 
 Additionally, the following Perl modules are necessary:
  * DBI
- * Getopt::Long
  * DateTime
  * Date::Holidays::DE (for taking care of German holidays)
  * DateTime::Format::Strptime
+ * Getopt::Long
+ * File::Path
 
 ```
 $ perl -MCPAN -e shell
@@ -29,12 +30,13 @@ cpan[n]> install DBI
 cpan[n]> install DateTime
 cpan[n]> install Date::Holidays::DE
 cpan[n]> install DateTime::Format::Strptime
+cpan[n]> install File::Path
 ```
 
-If you do not have installation privileges on your machine, you might want to use local::lib. 
+If you do not have installation privileges on your machine, you might want to use local::lib.
 <http://jjnapiorkowski.typepad.com/modern-perl/2010/02/bootstrapping-locallib.html> describes a one-step-solution how to do it; the necessary script can be found at <https://github.com/jjn1056/bootstrap-locallib.pl>
 
-## Usage 
+## Usage
 
 ### Step 1: Setting up the databases
 
@@ -69,11 +71,12 @@ Please provide loaddiva with all stop definition (`haltestellen.\*` but _not_ `h
 ./service2gtfs.pl
 ```
 
-Both scripts will go through the DIVA tables and transform their content into GTFS format. For the coordinate transformation, `cs2cs` from `proj(1)` is needed. Currently, only GK3 coordinates (`plan = NBWT` in the DIVA tables) will be converted. This has to be fixed. Sometimes. By someone. Someone™. Get the pull requests flowing.
+Both scripts will go through the DIVA tables and transform their content into GTFS format. For the coordinate transformation, `cs2cs` from `proj(1)` is needed. Currently, only a subset of coordinate reference systems (specified in the column `plan` in the DIVA tables) will be converted.
+Support for other CRS (e.g. GIP1) still needs to be implemented... sometimes... by someone (pull requests are appreciated).
 
 ### Step 4: Load route files
 
-After everything has been prepared, the magic can happen. Call 
+After everything has been prepared, the magic can happen. Call
 ```
 ./diva2gtfs.pl --path /path/to/diva/basedirectory/
 ```
@@ -88,15 +91,10 @@ Also, you might want to import Shapes from your friendly EFA. This is possible t
 
 ### Finally: Output GTFS data
 
-Run the following commands:
+Run the following command:
 
 ```
-sqlite3 -header -csv diva2gtfs.db "select * from stops AS s where s.stop_id in (select distinct parent_station from stops AS st where location_type = 0 and st.stop_id in (select distinct stop_id from stop_times)) UNION select * from stops where stop_id in (select distinct stop_id from stop_times);" > stops.txt
-sqlite3 -header -csv diva2gtfs.db "select * from calendar where service_id in (select distinct service_id from trips);" > calendar.txt
-sqlite3 -header -csv diva2gtfs.db "select * from calendar_dates where service_id in (select distinct service_id from trips);" > calendar_dates.txt
-sqlite3 -header -csv diva2gtfs.db "select * from trips;" > trips.txt
-sqlite3 -header -csv diva2gtfs.db "select * from routes;" > routes.txt
-sqlite3 -header -csv diva2gtfs.db "select * from stop_times;" > stop_times.txt
+./export.pl
 ```
 
 ## Further reading
