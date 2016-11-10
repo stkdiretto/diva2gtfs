@@ -7,6 +7,7 @@ use DBI;
 use XML::LibXML;
 use DateTime;
 use DateTime::Format::Strptime;
+use experimental 'smartmatch';
 
 my $XMLparser = XML::LibXML->new();
 
@@ -21,7 +22,7 @@ my %Shapes;
 my %Service;
 my $Strf = "%Y%m%d";
 my $Strp = DateTime::Format::Strptime->new(
-		pattern   => $Strf,
+	pattern   => $Strf,
     locale    => 'de_DE',
     time_zone => 'Europe/Berlin',
 );
@@ -36,54 +37,51 @@ my $Sunday = DateTime->today->add(days => (14 - DateTime->today->day_of_week) % 
 
 my $Debug = "1";
 
-GetOptions	(	"database=s"	=>	\$Database,
-							"efa=s"	=>	\$EFAendpoint,
-							"stopprefix=s" => \$StopIDprefix,
-							"stopregex=s" => \$StopIDregex,
-							"startdate=s" => \$StartDate
-						)
-						or die("Error in command line arguments\n");
+GetOptions ( "database=s"	=>	\$Database,
+			 "efa=s"	=>	\$EFAendpoint,
+			 "stopprefix=s" => \$StopIDprefix,
+			 "stopregex=s" => \$StopIDregex,
+			 "startdate=s" => \$StartDate
+) or die("Error in command line arguments\n");
 
 dbconnect();
 
-	my $daysth = $dbh->prepare('SELECT calendar.service_id, monday, tuesday, wednesday, thursday, friday, saturday, sunday, dmonday, dtuesday, dwednesday, dthursday, dfriday, dsaturday, dsunday
+my $daysth = $dbh->prepare('SELECT calendar.service_id, monday, tuesday, wednesday, thursday, friday, saturday, sunday, dmonday, dtuesday, dwednesday, dthursday, dfriday, dsaturday, dsunday
 FROM calendar
-		LEFT JOIN (SELECT service_id, date AS dmonday FROM calendar_dates WHERE date=strftime("%Y%m%d",date("now", "weekday 1")) AND exception_type = "2") AS cmonday ON cmonday.service_id = calendar.service_id
-		LEFT JOIN (SELECT service_id, date AS dtuesday FROM calendar_dates WHERE date=strftime("%Y%m%d",date("now", "weekday 2")) AND exception_type = "2") AS ctuesday ON ctuesday.service_id = calendar.service_id
-		LEFT JOIN (SELECT service_id, date AS dwednesday FROM calendar_dates WHERE date=strftime("%Y%m%d",date("now", "weekday 3")) AND exception_type = "2") AS cwednesday ON cwednesday.service_id = calendar.service_id
-		LEFT JOIN (SELECT service_id, date AS dthursday FROM calendar_dates WHERE date=strftime("%Y%m%d",date("now", "weekday 4")) AND exception_type = "2") AS cthursday ON cthursday.service_id = calendar.service_id
-		LEFT JOIN (SELECT service_id, date AS dfriday FROM calendar_dates WHERE date=strftime("%Y%m%d",date("now", "weekday 5")) AND exception_type = "2") AS cfriday ON cfriday.service_id = calendar.service_id
-		LEFT JOIN (SELECT service_id, date AS dsaturday FROM calendar_dates WHERE date=strftime("%Y%m%d",date("now", "weekday 6")) AND exception_type = "2") AS csaturday ON csaturday.service_id = calendar.service_id
-		LEFT JOIN (SELECT service_id, date AS dsunday FROM calendar_dates WHERE date=strftime("%Y%m%d",date("now", "weekday 0")) AND exception_type = "2") AS csunday ON csunday.service_id = calendar.service_id');
-	$daysth->execute();
+LEFT JOIN (SELECT service_id, date AS dmonday FROM calendar_dates WHERE date=strftime("%Y%m%d",date("now", "weekday 1")) AND exception_type = "2") AS cmonday ON cmonday.service_id = calendar.service_id
+LEFT JOIN (SELECT service_id, date AS dtuesday FROM calendar_dates WHERE date=strftime("%Y%m%d",date("now", "weekday 2")) AND exception_type = "2") AS ctuesday ON ctuesday.service_id = calendar.service_id
+LEFT JOIN (SELECT service_id, date AS dwednesday FROM calendar_dates WHERE date=strftime("%Y%m%d",date("now", "weekday 3")) AND exception_type = "2") AS cwednesday ON cwednesday.service_id = calendar.service_id
+LEFT JOIN (SELECT service_id, date AS dthursday FROM calendar_dates WHERE date=strftime("%Y%m%d",date("now", "weekday 4")) AND exception_type = "2") AS cthursday ON cthursday.service_id = calendar.service_id
+LEFT JOIN (SELECT service_id, date AS dfriday FROM calendar_dates WHERE date=strftime("%Y%m%d",date("now", "weekday 5")) AND exception_type = "2") AS cfriday ON cfriday.service_id = calendar.service_id
+LEFT JOIN (SELECT service_id, date AS dsaturday FROM calendar_dates WHERE date=strftime("%Y%m%d",date("now", "weekday 6")) AND exception_type = "2") AS csaturday ON csaturday.service_id = calendar.service_id
+LEFT JOIN (SELECT service_id, date AS dsunday FROM calendar_dates WHERE date=strftime("%Y%m%d",date("now", "weekday 0")) AND exception_type = "2") AS csunday ON csunday.service_id = calendar.service_id');
+$daysth->execute();
 
-	while (my $servicerow = $daysth->fetchrow_hashref()) {
-		if ($servicerow->{monday} eq "1" and not defined $servicerow->{cmonday}) {
-			$Service{$servicerow->{service_id}} = $Monday->strftime($Strf);
-		}
-		elsif ($servicerow->{tuesday} eq "1" and not defined $servicerow->{ctuesday}) {
-			$Service{$servicerow->{service_id}} = $Tuesday->strftime($Strf);
-		}
-		elsif ($servicerow->{wednesday} eq "1" and not defined $servicerow->{cwednesday}) {
-			$Service{$servicerow->{service_id}} = $Wednesday->strftime($Strf);
-		}
-		elsif ($servicerow->{thursday} eq "1" and not defined $servicerow->{cthursday}) {
-			$Service{$servicerow->{service_id}} = $Thursday->strftime($Strf);
-		}
-		elsif ($servicerow->{friday} eq "1" and not defined $servicerow->{cfriday}) {
-			$Service{$servicerow->{service_id}} = $Friday->strftime($Strf);
-		}
-		elsif ($servicerow->{saturday} eq "1" and not defined $servicerow->{csaturday}) {
-			$Service{$servicerow->{service_id}} = $Saturday->strftime($Strf);
-		}
-		elsif ($servicerow->{sunday} eq "1" and not defined $servicerow->{csunday}) {
-			$Service{$servicerow->{service_id}} = $Sunday->strftime($Strf);
-		}
+while (my $servicerow = $daysth->fetchrow_hashref()) {
+	if ($servicerow->{monday} eq "1" and not defined $servicerow->{cmonday}) {
+		$Service{$servicerow->{service_id}} = $Monday->strftime($Strf);
 	}
-
+	elsif ($servicerow->{tuesday} eq "1" and not defined $servicerow->{ctuesday}) {
+		$Service{$servicerow->{service_id}} = $Tuesday->strftime($Strf);
+	}
+	elsif ($servicerow->{wednesday} eq "1" and not defined $servicerow->{cwednesday}) {
+		$Service{$servicerow->{service_id}} = $Wednesday->strftime($Strf);
+	}
+	elsif ($servicerow->{thursday} eq "1" and not defined $servicerow->{cthursday}) {
+		$Service{$servicerow->{service_id}} = $Thursday->strftime($Strf);
+	}
+	elsif ($servicerow->{friday} eq "1" and not defined $servicerow->{cfriday}) {
+		$Service{$servicerow->{service_id}} = $Friday->strftime($Strf);
+	}
+	elsif ($servicerow->{saturday} eq "1" and not defined $servicerow->{csaturday}) {
+		$Service{$servicerow->{service_id}} = $Saturday->strftime($Strf);
+	}
+	elsif ($servicerow->{sunday} eq "1" and not defined $servicerow->{csunday}) {
+		$Service{$servicerow->{service_id}} = $Sunday->strftime($Strf);
+	}
+}
 
 my $sth = $dbh->prepare('SELECT route_id,trip_id,shape_id, trips.service_id AS service_id, nextdate, prevdate FROM trips LEFT JOIN (SELECT service_id, MIN(date) as nextdate from calendar_dates WHERE date > strftime(?) AND exception_type <> "2" GROUP BY service_id) AS nextcaldate ON trips.service_id = nextcaldate.service_id LEFT JOIN (SELECT service_id, MAX(date) as prevdate from calendar_dates WHERE date > strftime(?) AND date < strftime(?) AND exception_type <> "2" GROUP BY service_id) AS prevcaldate ON trips.service_id = prevcaldate.service_id');
-
 $sth->execute($Strf,$StartDate,$Strf);
 
 while (my $row = $sth->fetchrow_hashref()) {
@@ -124,7 +122,6 @@ while (my $row = $sth->fetchrow_hashref()) {
 		$Trips{$trip}{start} = $destrow->{start};
 		$Trips{$trip}{triptime} = $destrow->{triptime};
 		$Trips{$trip}{destination} = $destrow->{destination};
-
 	}
 }
 
@@ -174,7 +171,6 @@ for my $updateTrip (keys %Trips) {
 print "Trips updated in database\n";
 
 $dbh->commit();
-
 
 # REQUEST SHAPE FROM EFA
 

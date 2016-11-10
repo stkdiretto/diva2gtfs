@@ -1,6 +1,5 @@
 # DIVA2GTFS
 
-
 This is an experimental suite used to import DIVA data structures and parse it into GTFS. It is currently neither well designed nor particularly user-friendly, but it gets the job done, somehow.
 
 ## Prerequisites
@@ -8,12 +7,12 @@ This is an experimental suite used to import DIVA data structures and parse it i
 I recommend running the scripts in a GNU/Linux environment. It might be possible to use this suite in MS-Windows, but I would not know how to perform the necessary coordinate transformations :(
 
 You will need:
- * perl(1)
- * [proj(1)](http://trac.osgeo.org/proj/) (for the cs2cs coordinate transformation tool)
- * sqlite3 (1) (or another database of your choice)
+ * perl
+ * [proj](http://trac.osgeo.org/proj/) (for the cs2cs coordinate transformation tool)
+ * sqlite3 (or another database of your choice)
 
 ```
-$ apt-get install perl proj sqlite3
+$ apt-get install perl proj sqlite3 (for debian based distributions)
 ```
 
 Additionally, the following Perl modules are necessary:
@@ -40,24 +39,24 @@ If you do not have installation privileges on your machine, you might want to us
 
 ### Step 1: Setting up the databases
 
-initdb will take care of setting up the sqlite databases. Just run `./initdb.pl --create all` to create both DIVA and GTFS databases: divadata.db and diva2gtfs.db
+initdb will take care of setting up the sqlite databases.   
+Just run `./initdb.pl --create all` to create both DIVA and GTFS databases: `build/data/divadata.db` and `build/data/diva2gtfs.db`
 
-initdb supports the following options:
-```
---create <option> # creates tables, if not already existing
---drop <option>   # drops tables if existing
---clear <option>  # drops tables and rebuild them
-```
-
-Options:
- * divaservice -- DIVA tables concerning service restrictions
- * divalnrlit -- DIVA tables pointing to route definition files
- * divastops -- DIVA stop definition
- * diva -- _all_ of the DIVA tables
- * gtfsstops -- GTFS stop table
- * gtfsruns -- GTFS trips, routes and stop_times tables
- * gtfscalendar -- GTFS calendar and calendar_dates tables
- * gtfs -- _all_ GTFS tables (includes tables not accessed by the gtfs options above)
+	Usage: ./initdb command <options>
+	Command:
+		--create # creates tables, if not already existing
+		--drop # drops tables if existing
+		--clear  # drops tables and rebuild them
+	Options:
+		all - all of the DIVA and GTFS tables
+		diva -- all of the DIVA tables
+		divalnrlit -- DIVA tables pointing to route definition files
+		divaservice -- DIVA tables concerning service restrictions
+		divastops -- DIVA stop definition
+		gtfs -- all GTFS tables (includes tables not accessed by the gtfs options above)
+		gtfscalendar -- GTFS calendar and calendar_dates tables
+		gtfsruns -- GTFS trips, routes and stop_times tables
+		gtfsstops -- GTFS stop table
 
 ### Step 2: Load DIVA data into database
 
@@ -66,10 +65,10 @@ Options:
 Please provide loaddiva with all stop definition (`haltestellen.\*` but _not_ `haltestellen.format32.\*`), service restriction (`vbesch.\*`), agencies descriptions (`bzw`), guaranteed transfers (`anschlb.\*`) and route tables (`lnrlit`) and let it churn through them.
 
 ### Step 3: Convert DIVA tables to GTFS
-```
-./stops2gtfs.pl
-./service2gtfs.pl
-```
+
+	./stops2gtfs.pl
+	./service2gtfs.pl
+
 
 Both scripts will go through the DIVA tables and transform their content into GTFS format. For the coordinate transformation, `cs2cs` from `proj(1)` is needed. Currently, only a subset of coordinate reference systems (specified in the column `plan` in the DIVA tables) will be converted.
 Support for other CRS (e.g. GIP1) still needs to be implemented... sometimes... by someone (pull requests are appreciated).
@@ -77,25 +76,27 @@ Support for other CRS (e.g. GIP1) still needs to be implemented... sometimes... 
 ### Step 4: Load route files
 
 After everything has been prepared, the magic can happen. Call
-```
-./diva2gtfs.pl --path /path/to/diva/basedirectory/
-```
+
+	./diva2gtfs.pl --path </path/to/diva/basedirectory/>
 
 If the `lnrlit` table was correctly populated, everything should happen automagically. Or not. I am lacking test cases, so far.
 
 ### Step 5: Fine-tuning the data
 
-Optionally, you can now use the guaranteed transfers data out of the DIVA anschlb table and update your trips table: `./transfers2gtfs.pl`
+Optionally, you can now use the guaranteed transfers data out of the DIVA anschlb table to update your trips table:
 
-Also, you might want to import Shapes from your friendly EFA. This is possible through `./efaShapeExporter.pl`, which is currently hardcoded to the DING EFA. Messy coding, again, sorry.
+	./transfers2gtfs.pl
+
+Also, you might want to import Shapes from your friendly EFA.
+This is possible through `./efaShapeExporter.pl`, which is currently hardcoded to the DING EFA.
+Messy coding, again, sorry.
 
 ### Finally: Output GTFS data
 
 Run the following command:
 
-```
-./export.pl
-```
+	./export.sh <agencyName>
+
 
 ## Further reading
 
