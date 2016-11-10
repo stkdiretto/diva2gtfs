@@ -11,7 +11,9 @@ You will need:
  * [proj](http://trac.osgeo.org/proj/) (for the cs2cs coordinate transformation tool)
  * sqlite3 (or another database of your choice)
 
-	$ apt-get install perl proj sqlite3 (for debian based distributions)
+```
+$ apt-get install perl proj sqlite3 (for debian based distributions)
+```
 
 Additionally, the following Perl modules are necessary:
  * DBI
@@ -21,13 +23,14 @@ Additionally, the following Perl modules are necessary:
  * Getopt::Long
  * File::Path
 
-	$ perl -MCPAN -e shell
-	cpan[n]> install DBI
-	cpan[n]> install DateTime
-	cpan[n]> install Date::Holidays::DE
-	cpan[n]> install DateTime::Format::Strptime
-	cpan[n]> install File::Path
-
+```
+$ perl -MCPAN -e shell
+cpan[n]> install DBI
+cpan[n]> install DateTime
+cpan[n]> install Date::Holidays::DE
+cpan[n]> install DateTime::Format::Strptime
+cpan[n]> install File::Path
+```
 
 If you do not have installation privileges on your machine, you might want to use local::lib.
 <http://jjnapiorkowski.typepad.com/modern-perl/2010/02/bootstrapping-locallib.html> describes a one-step-solution how to do it; the necessary script can be found at <https://github.com/jjn1056/bootstrap-locallib.pl>
@@ -36,10 +39,8 @@ If you do not have installation privileges on your machine, you might want to us
 
 ### Step 1: Setting up the databases
 
-initdb will take care of setting up the sqlite databases.
+initdb will take care of setting up the sqlite databases.   
 Just run `./initdb.pl --create all` to create both DIVA and GTFS databases: `build/data/divadata.db` and `build/data/diva2gtfs.db`
-
-initdb supports the following options:
 
 	Usage: ./initdb command <options>
 	Command:
@@ -68,6 +69,7 @@ Please provide loaddiva with all stop definition (`haltestellen.\*` but _not_ `h
 	./stops2gtfs.pl
 	./service2gtfs.pl
 
+
 Both scripts will go through the DIVA tables and transform their content into GTFS format. For the coordinate transformation, `cs2cs` from `proj(1)` is needed. Currently, only a subset of coordinate reference systems (specified in the column `plan` in the DIVA tables) will be converted.
 Support for other CRS (e.g. GIP1) still needs to be implemented... sometimes... by someone (pull requests are appreciated).
 
@@ -76,7 +78,6 @@ Support for other CRS (e.g. GIP1) still needs to be implemented... sometimes... 
 After everything has been prepared, the magic can happen. Call
 
 	./diva2gtfs.pl --path </path/to/diva/basedirectory/>
-
 
 If the `lnrlit` table was correctly populated, everything should happen automagically. Or not. I am lacking test cases, so far.
 
