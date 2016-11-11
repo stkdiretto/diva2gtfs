@@ -39,7 +39,7 @@ If you do not have installation privileges on your machine, you might want to us
 
 ### Step 1: Setting up the databases
 
-initdb will take care of setting up the sqlite databases.
+initdb will take care of setting up the sqlite databases.   
 Just run `./initdb.pl --create all` to create both DIVA and GTFS databases: `build/data/divadata.db` and `build/data/diva2gtfs.db`
 
 	Usage: ./initdb command <options>
