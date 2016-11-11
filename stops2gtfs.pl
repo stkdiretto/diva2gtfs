@@ -135,7 +135,7 @@ while (my $row = $sth->fetchrow_hashref()) {
 	$insertsth->execute($stop_id,undef,$stop_name,$stop_lat,$stop_lon,$zone_id,"1",undef,undef);
 }
 
-print "...and written to GTFS database\n";
+print " and written to GTFS database\n";
 
 # Child station handling
 
@@ -174,7 +174,7 @@ while (my $row = $sth->fetchrow_hashref()) {
 
 }
 
-print("...and written to GTFS database\n");
+print(" and written to GTFS database\n");
 
 # Station handling without child stations
 
@@ -208,7 +208,7 @@ while (my $row = $sth->fetchrow_hashref()) {
 	$insertsth->execute($row->{stop_id},undef,$row->{stop_name},$stop_lat,$stop_lon,$row->{zone_id},"0",undef,undef);
 }
 
-print "...and written to GTFS database\n";
+print " and written to GTFS database\n";
 
 # Station handling without coordinates
 
