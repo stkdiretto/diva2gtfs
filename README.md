@@ -35,7 +35,16 @@ cpan[n]> install File::Path
 If you do not have installation privileges on your machine, you might want to use local::lib.
 <http://jjnapiorkowski.typepad.com/modern-perl/2010/02/bootstrapping-locallib.html> describes a one-step-solution how to do it; the necessary script can be found at <https://github.com/jjn1056/bootstrap-locallib.pl>
 
-## Usage
+## Quick start
+
+If you do not need to fine-tune your data and just want to get out a GTFS file from your DIVA data you can use the `all.sh` script.
+To run it just pass in the path to your diva data and the name of your agency:
+
+	./all.sh ~/documents/diva/myAgency myAgency
+
+After some computation times you can find your data as GTFS-file in the folder ./build/gtfs/myAgency and ./build/gtfs/myAgency.zip.
+
+## Detailed Usage
 
 ### Step 1: Setting up the databases
 
@@ -74,7 +83,7 @@ Please provide loaddiva with all stop definition (`haltestellen.\*` but _not_ `h
 All three scripts will go through the DIVA tables and transform their content into GTFS format.
 Agencies can be filled with additional information using the parameter "set":
 
-	.agencies2gtfs.pl --set agency_url="http://www.meinVerkehrsbetrieb.de" --set agency_phone=00491234567
+	./agencies2gtfs.pl --set agency_url="http://www.meinVerkehrsbetrieb.de" --set agency_phone=00491234567
 
 For the coordinate transformation, `cs2cs` from `proj(1)` is needed. Currently, only a subset of coordinate reference systems (specified in the column `plan` in the DIVA tables) will be converted.
 Support for other CRS (e.g. GIP1) still needs to be implemented... sometimes... by someone (pull requests are appreciated).

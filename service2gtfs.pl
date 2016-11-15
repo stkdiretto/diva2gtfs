@@ -15,14 +15,7 @@ dbconnect();
 
 insert_holidays();
 
-my $sth = $dbh->prepare('INSERT OR REPLACE INTO calendar values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-$sth->execute(0,1,1,1,1,1,0,0,undef,undef);
-$sth = $dbh->prepare('INSERT OR REPLACE INTO calendar values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-$sth->execute(2,0,0,0,0,0,1,0,undef,undef);
-$sth = $dbh->prepare('INSERT OR REPLACE INTO calendar values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-$sth->execute(3,0,0,0,0,0,0,1,undef,undef);
-
-$sth = $divadbh->prepare('SELECT COUNT(*) AS cnt FROM ServiceRestriction');
+my $sth = $divadbh->prepare('SELECT COUNT(*) AS cnt FROM ServiceRestriction');
 $sth->execute();
 
 my $cnt = 0;
@@ -33,6 +26,8 @@ while (my $rowCnt = $sth->fetchrow_hashref()) {
 $sth = $divadbh->prepare('SELECT anfjahr, code, dat_von, dat_bis, vbt_von, vbt_bis, vt FROM ServiceRestriction');
 $sth->execute();
 
+my $date_from = undef;
+my $date_to = undef;
 my $i = 0;
 while (my $row = $sth->fetchrow_hashref()) {
 	$i += 1;
@@ -50,10 +45,18 @@ while (my $row = $sth->fetchrow_hashref()) {
 	my $enddate = $referencedate->clone();
 	$enddate->add ( months => $row->{vbt_bis} );
 
+	if (! defined $date_from  || $date_from > $workingdate) {
+		$date_from = $workingdate->clone();
+	}
+	if (! defined $date_to || $date_to < $enddate) {
+		$date_to = $enddate->clone();
+	}
+
 	print ("$i/$cnt: $row->{code}, $referencedate, von: ", $workingdate->strftime($Strf) , ", bis: ",$enddate->strftime($Strf),"\n");
 
-	my $sth = $dbh->prepare('INSERT OR REPLACE INTO calendar (service_id, monday, tuesday, wednesday, thursday, friday, saturday, sunday, start_date, end_date) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-	$sth->execute($row->{code},0,0,0,0,0,0,0,$workingdate->strftime($Strf),$enddate->strftime($Strf));
+	my $sth = $dbh->prepare('INSERT OR REPLACE INTO calendar (service_id, monday, tuesday, wednesday, thursday, friday, saturday, sunday, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+	$sth->execute($row->{code}, 0, 0, 0, 0, 0, 0, 0, $workingdate->strftime($Strf), $enddate->strftime($Strf));
+	$dbh->commit();
 
 	my @vt = $row->{vt} =~ /[0-9A-Fa-f]{8}/g;
 
@@ -66,27 +69,34 @@ while (my $row = $sth->fetchrow_hashref()) {
 	$dbh->commit();
 }
 
+$sth = $dbh->prepare('INSERT OR REPLACE INTO calendar VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+$sth->execute(0, 1, 1, 1, 1, 1, 0, 0, $date_from->strftime($Strf), $date_to->strftime($Strf));
+$sth->execute(2, 0, 0, 0, 0, 0, 1, 0, $date_from->strftime($Strf), $date_to->strftime($Strf));
+$sth->execute(3, 0, 0, 0, 0, 0, 0, 1, $date_from->strftime($Strf), $date_to->strftime($Strf));
+$dbh->commit();
+
 disconnect();
 
 sub eval_month{
 	my %process = @_;
 
-	# Create list of dates for current month
+	# create list of dates for current month
 	my $enddate = DateTime->last_day_of_month( year => $process{month}->year(), month => $process{month}->month() );
 
-	#convert hexadeximal month pattern into binary and put it into an array. Each day becomes one array cell with 0 or 1
+	# convert hexadeximal month pattern into binary and put it into an array. Each day becomes one array cell with 0 or 1
 	my @is_valid = (map { unpack ('B*', pack ('H*',$_)) } $process{daypattern})[0] =~ /[01]/g;
 
-	#iterate over all dates of the current month
+	# iterate over all dates of the current month
+	my $sth = $dbh->prepare('INSERT OR REPLACE INTO calendar_dates (service_id, date, exception_type) VALUES (?, ?, ?)');
 	for (my $date = $process{month}->clone; $date <= $enddate; $date->add( days => 1 )) {
-	my $day = $date->day();
+		my $day = $date->day();
 		# consider only days where this service_id is valid
 		if ($is_valid[32-$day]) {
-#			print ("$process{code},$year$month$day,$is_valid[32-$day]\n");
-			my $sth = $dbh->prepare('INSERT OR REPLACE INTO calendar_dates (service_id, date, exception_type) values (?, ?, ?)');
-			$sth->execute($process{code},$date->strftime($Strf),$is_valid[32-$day]);
+#			print ("$process{code}, $year$month$day, $is_valid[32-$day]\n");
+			$sth->execute($process{code}, $date->strftime($Strf), $is_valid[32-$day]);
 		}
 	}
+
 	$dbh->commit();
 }
 
@@ -109,18 +119,18 @@ sub insert_holidays {
 		# monday through friday: Disable Mo-Fr service, enable sunday service
 		if ($day_of_week < 6) {
 			print ("Disabling 0, enabling 3 for ", $holiday_date->strftime($Strf), "\n");
-			my $sth = $dbh->prepare('INSERT OR REPLACE INTO calendar_dates (service_id, date, exception_type) values (?, ?, ?)');
+			my $sth = $dbh->prepare('INSERT OR REPLACE INTO calendar_dates (service_id, date, exception_type) VALUES (?, ?, ?)');
 			$sth->execute(0,$holiday_date->strftime($Strf),2);
-			$sth = $dbh->prepare('INSERT OR REPLACE INTO calendar_dates (service_id, date, exception_type) values (?, ?, ?)');
+			$sth = $dbh->prepare('INSERT OR REPLACE INTO calendar_dates (service_id, date, exception_type) VALUES (?, ?, ?)');
 			$sth->execute(3,$holiday_date->strftime($Strf),1);
 
 		}
 		# saturday: disable sa service, enable sunday service
 		elsif ($day_of_week == 6) {
 			print ("Disabling 2, enabling 3 for ", $holiday_date->strftime($Strf), "\n");
-			my $sth = $dbh->prepare('INSERT OR REPLACE INTO calendar_dates (service_id, date, exception_type) values (?, ?, ?)');
+			my $sth = $dbh->prepare('INSERT OR REPLACE INTO calendar_dates (service_id, date, exception_type) VALUES (?, ?, ?)');
 			$sth->execute(2,$holiday_date->strftime($Strf),2);
-			$sth = $dbh->prepare('INSERT OR REPLACE INTO calendar_dates (service_id, date, exception_type) values (?, ?, ?)');
+			$sth = $dbh->prepare('INSERT OR REPLACE INTO calendar_dates (service_id, date, exception_type) VALUES (?, ?, ?)');
 			$sth->execute(3,$holiday_date->strftime($Strf),1);
 		}
 	}
@@ -154,6 +164,11 @@ sub dbconnect {
 
 sub disconnect {
 	$dbh->disconnect();
+	print "GTFS-Database closed.\n";
+
 	$divadbh->disconnect();
-	print "Disconnected. Bye.\n";
+	print "Diva-Database closed.\n";
+
+	print "Everything done.\n";
+	print "Bye!\n";
 }
