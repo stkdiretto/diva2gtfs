@@ -5,22 +5,22 @@ use warnings;
 use utf8;
 use DBI;
 use File::Path qw(make_path);
+use Getopt::Long;
 use Text::ParseWords;
-use open ':encoding(windows-1252)';
 
 # take care of windows newlines
 #$/ = "\n";
 
-my $agency_timezone = "Europe/Berlin";
-my $agency_lang = "de";
-my $agency_url = "http://www.ding.eu";
+# Hard-coded values
+my %defaults = (
+	agency_fare_url => undef,
+	agency_lang => "de",
+	agency_phone => undef,
+	agency_timezone => "Europe/Berlin",
+	agency_url => "http://www.example.com/"
+);
 
-my $line;
-
-# DEFINE I/O FILES
-my $log;
-my $log_folder = "build/log";
-make_path($log_folder);
+GetOptions ("set=s" => \%defaults) or die("Error in command line arguments\n");
 
 # --------------------
 # CONNECT TO DATABASE
@@ -29,11 +29,22 @@ make_path($log_folder);
 my $db_folder = "build/data";
 make_path($db_folder);
 
-my $driver   = "SQLite";
-my $database = "$db_folder/diva2gtfs.db";
-my $dsn = "DBI:$driver:dbname=$database";
+my $driver = "SQLite";
+my $divadatabase = "$db_folder/divadata.db";
+my $divadsn = "DBI:$driver:dbname=$divadatabase";
 my $userid = "";
 my $password = "";
+my $divadbh = DBI->connect($divadsn, $userid, $password, { RaiseError => 1 })
+                      or die $DBI::errstr;
+
+# sacrificing security for speed
+$divadbh->{AutoCommit} = 0;
+$divadbh->do( "COMMIT; PRAGMA synchronous=OFF; BEGIN TRANSACTION" );
+
+print "Opened diva-database successfully\n";
+
+my $database = "$db_folder/diva2gtfs.db";
+my $dsn = "DBI:$driver:dbname=$database";
 my $dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 })
                       or die $DBI::errstr;
 
@@ -41,58 +52,54 @@ my $dbh = DBI->connect($dsn, $userid, $password, { RaiseError => 1 })
 $dbh->{AutoCommit} = 0;
 $dbh->do( "COMMIT; PRAGMA synchronous=OFF; BEGIN TRANSACTION" );
 
-print "Opened database successfully\n";
+print "Opened gtfs-database successfully\n";
 
 # --------------------------
 # END OF DATABASE GEDOENS
 # --------------------------
 
-open ($log, ">","$log_folder/agencies2gtfs.log") or die "Something terrible happened while opening my log file: $!";
-#open ($log, ">","/dev/null") or die "Something terrible happened while opening my log file: $!";
-
-# ------------------------------------------
-# ITERATE OVER ALL FILES PASSED AS ARGUMENTS
-
-foreach my $file (@ARGV) {
-	process($file);
-}
 
 # -------------------------------------------
+# MAIN METHOD
+#--------------------------------------------
 
+my $agency_id;
+my $agency_name;
+my $agency_url;
+my $agency_timezone;
+my $agency_lang;
+my $agency_phone;
+my $agency_fare_url;
 
-# ------------------------------------------
-# PROCESS EACH FILE
-# -----------------------------------------
+print "Agencies ";
 
-sub process {
-	my $arg = shift;
-	open (FILE, "<", "$arg") or die("Could not open inputfile: $!");
-	print $log "Now working on $arg\n";
+my $sth = $divadbh->prepare('SELECT bzw AS agency_id, bzwtext AS agency_name FROM OpBranch');
+$sth->execute();
+print "queried...";
 
-	foreach $line (<FILE>) {
-		chomp $line;
-		if ($line =~ /rec;.*?;\"(?<agency_id>.*?)\";\"(?<agency_name>.*?)\";/) {
-			print "parsing: $+{agency_id},$+{agency_name}\n";
-			my $sth = $dbh->prepare('INSERT INTO agency values (?, ?, ?, ?, ?, ?, ?)');
-			$sth->execute($+{agency_id},$+{agency_name},$agency_url,$agency_timezone,$agency_lang, undef, undef);
-		}
-	}
+my $sthInsert = $dbh->prepare('INSERT OR REPLACE INTO agency VALUES (?, ?, ?, NULLIF(?, \'\'), NULLIF(?, \'\'), NULLIF(?, \'\'), NULLIF(?, \'\'))');
+while (my $row = $sth->fetchrow_hashref()) {
+	$agency_id = $row->{agency_id};
+	$agency_name = $row->{agency_name};
+	$agency_url = $defaults{agency_url};
+	$agency_timezone = $defaults{agency_timezone};
+	$agency_lang = $defaults{agency_lang};
+	$agency_phone = $defaults{agency_phone};
+	$agency_fare_url = $defaults{agency_fare_url};
 
-	$dbh->commit;
-
-	close FILE;
+	$sthInsert->execute($agency_id, $agency_name, $agency_url, $agency_timezone, $agency_lang, $agency_phone, $agency_fare_url);
 }
-
-# ---------------------------------
-# END OF FILE PROCESSING SUBROUTINE
-# ---------------------------------
-
+$dbh->commit();
+print " and written to GTFS database\n";
 
 # ---------------------------------
 # CLEANING UP!
 # ---------------------------------
 
-close $log;
+$divadbh->disconnect();
+print "Diva-Database closed.\n";
+
 $dbh->disconnect();
-print "Database closed. ";
-print "Everything done. Bye!\n";
+print "GTFS-Database closed.\n";
+print "Everything done.\n";
+print "Bye!\n";

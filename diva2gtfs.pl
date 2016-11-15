@@ -36,13 +36,14 @@ my $basepath = '';
 
 dbconnect();
 
-GetOptions	( "path=s" => \$basepath) or die("Error in command line arguments\n");
+GetOptions(
+	"path=s" => \$basepath
+) or die("Error in command line arguments\n");
 
 my $sth = $divadbh->prepare('SELECT uvz,lierg,kbez,textpfp,TextBAlang FROM TabelleLnrlit');
 $sth->execute();
 
 while (my $row = $sth->fetchrow_hashref()) {
-
 	# naming confusion galore.
 	# tripname: Everything, e.g. 11310a or 11310_
 	# basename: Just the operator and route, e.g. 11310
@@ -71,8 +72,7 @@ while (my $row = $sth->fetchrow_hashref()) {
 
 	my $newroute = $dbh->prepare('INSERT OR REPLACE INTO routes (route_id, agency_id, route_short_name, route_long_name) VALUES (?, ?, ?, ?)');
 	$newroute->execute($operator."-".$textpfp,$operator,$textpfp,$textbalang);
-
-	$dbh->commit;
+	$dbh->commit();
 
 	my %job = (
 		'path' => $path,
@@ -94,11 +94,17 @@ while (my $row = $sth->fetchrow_hashref()) {
 #	process($file);
 #}
 
-# -------------------------------------------
+# ---------------------------------
+# CLEANING UP!
+# ---------------------------------
 
+close $log;
+
+disconnect();
 
 # ----------------------------------------
 # SUBROUTINE TO EXPAND TIMING PATTERNS
+# ----------------------------------------
 
 sub expandtimes {
 	my @timearray;
@@ -163,14 +169,18 @@ sub process {
 				my $stopLen = (length $line) / $stopCnt;
 				@stops = ();
 
-				push @stops, substr $line, 0, $stopLen, '' while $line;
+				while ($line) {
+					my $stop_id = substr $line, 0, $stopLen, '';
+					$stop_id =~ s/^0+//; # remove leading zeros
+					push @stops, $stop_id
+				}
+
 				print $log " FW recognized: ";
 				print $log "$_ " for @stops;
 				print $log "\n";
 			}
 			# Recognize Stop Platforms
 			elsif ($line =~ s/ST[H,R](?<cnt>[0-9]{3})//) {
-				# TODO: will do this later :'(
 				my $stopCnt = $+{cnt} + 0; # + 0 converts to number
 				if ($stopCnt <= 0) {
 					print " Skipping stop platform (invalid stop count): $current_line\n";
@@ -268,7 +278,7 @@ sub process {
 						$service_id = $+{servicerestriction};
 					}
 
-					my $sth = $dbh->prepare('INSERT OR REPLACE INTO trips (route_id, service_id, trip_id, trip_short_name, direction_id, shape_id) values (?, ?, ?, ?, ?, ?)');
+					my $sth = $dbh->prepare('INSERT OR REPLACE INTO trips (route_id, service_id, trip_id, trip_short_name, direction_id, shape_id) VALUES (?, ?, ?, ?, ?, ?)');
 					$sth->execute($process{route},$service_id,$process{tripname}.$tripid,$trip_short_name,$direction,$process{route}.$timingpattern);
 
 					# Analyze timing pattern for trip and save stop times
@@ -290,7 +300,7 @@ sub process {
 
 						my $ft_timing_pattern = $FT{$timingpattern}[$i];
 						if ($ft_timing_pattern ne '|' and $ft_timing_pattern ne '$' and $ft_timing_pattern ne '-') {
-							my $sth = $dbh->prepare('INSERT OR REPLACE INTO stop_times (trip_id, arrival_time, departure_time, stop_id, stop_sequence) values (?, ?, ?, ?, ?)');
+							my $sth = $dbh->prepare('INSERT OR REPLACE INTO stop_times (trip_id, arrival_time, departure_time, stop_id, stop_sequence) VALUES (?, ?, ?, ?, ?)');
 
 							$minutes = $minutes + $ft_timing_pattern;
 							if ($minutes > 59) {
@@ -324,7 +334,7 @@ sub process {
 								print $log ("\t$i\t$ft_timing_pattern\tFW Stop\t $stops[$i] at $hours:$minutes\n");
 							}
 
-							$sth->execute($process{tripname}.$tripid,$arrival_time,$departure_time,$stops[$i],$i);
+							$sth->execute($process{tripname}.$tripid, $arrival_time, $departure_time, $stops[$i], $i);
 						} else {
 							print $log ("\t$i\t$ft_timing_pattern\tFW Skip\t $stops[$i]\n");
 						}
@@ -424,8 +434,7 @@ sub process {
 
 		my $sth = $dbh->prepare('UPDATE routes SET route_type = ?, route_long_name= ? where route_id IS ?');
 		$sth->execute($route_type,$route_long_name,$process{route});
-
-		$dbh->commit;
+		$dbh->commit();
 
 		close FILE;
 	} else {
@@ -436,16 +445,6 @@ sub process {
 # ---------------------------------
 # END OF FILE PROCESSING SUBROUTINE
 # ---------------------------------
-
-# ---------------------------------
-# CLEANING UP!
-# ---------------------------------
-
-close $log;
-
-$dbh->disconnect();
-print "Database closed. ";
-print "Everything done. Bye!\n";
 
 # --------------------
 # CONNECT TO DATABASE
@@ -472,5 +471,16 @@ sub dbconnect {
 	$dbh->do( "COMMIT; PRAGMA synchronous=OFF; BEGIN TRANSACTION" );
 
 	print "Opened database successfully\n";
+}
+
+sub disconnect {
+	$dbh->disconnect();
+	print "GTFS-Database closed.\n";
+
+	$divadbh->disconnect();
+	print "Diva-Database closed.\n";
+
+	print "Everything done.\n";
+	print "Bye!\n";
 }
 

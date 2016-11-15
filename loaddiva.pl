@@ -94,7 +94,7 @@ sub process {
 
 	}
 
-	$divadbh->commit;
+	$divadbh->commit();
 
 	close FILE;
 }
@@ -110,4 +110,5 @@ sub process {
 
 $divadbh->disconnect();
 print "Database closed. ";
-print "Everything done. Bye!\n";
+print "Everything done.\n";
+print "Bye!\n";

@@ -59,7 +59,8 @@ my %crs = (
 # GIP1 causes issues when calling cs2cs (exception cause is "projection not named")
 #	GIP1 => {
 #		cs2cs_params => '+init=epsg:31259 +to +init:epsg:4326',
-#		offset => 6000000
+##		offset => 6000000
+#		offset => 987402
 #	},
 	MVTT => {
 		cs2cs_params => '+init=epsg:31466 +to +init=epsg:4326',
@@ -94,6 +95,7 @@ my %crs = (
 		offset => 1000000
 	}
 );
+my @supported_crs = keys %crs;
 my $stop_id = "";
 my $stop_name = "";
 my $stop_lat = "";
@@ -104,18 +106,20 @@ my $zone_id = "";
 
 print "Parent stations ";
 
-my $sth = $divadbh->prepare('SELECT S.hstnr AS stop_id, S.hstname AS stop_name, group_concat(tz.tzonen,"") AS zone_id, HK.x AS stop_lat, HK.y AS stop_lon, HK.plan AS plan FROM Stop AS S
-LEFT OUTER JOIN Stop_hst_koord as HK ON S._AutoKey_=HK._FK__AutoKey_
-LEFT OUTER JOIN Stop_tzonen as tz ON S._AutoKey_=tz._FK__AutoKey_
-WHERE S._AutoKey_ IN (SELECT SHS._FK__AutoKey_ FROM Stop_hst_steig AS SHS)
-GROUP BY stop_id, HK.x');
+my $insertsth = $dbh->prepare('INSERT OR REPLACE INTO stops VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+my $sth = $divadbh->prepare('SELECT S.hstnr AS stop_id, S.hstname AS stop_name, bzn.hstohne AS stop_name_bzn, group_concat(tz.tzonen, "") AS zone_id, HK.x AS stop_lat, HK.y AS stop_lon, HK.plan AS plan FROM Stop AS S
+LEFT OUTER JOIN Stop_bzn AS bzn ON S._AutoKey_ = bzn._FK__AutoKey_
+LEFT OUTER JOIN Stop_hst_koord as HK ON S._AutoKey_ = HK._FK__AutoKey_
+LEFT OUTER JOIN Stop_tzonen as tz ON S._AutoKey_ = tz._FK__AutoKey_
+WHERE S._AutoKey_ IN (SELECT SHS._FK__AutoKey_ FROM Stop_hst_steig AS SHS) AND HK.plan IN (\'' . join('\', \'',  @supported_crs) . '\')
+GROUP BY stop_id');
 $sth->execute();
-
 print "queried...";
 
 while (my $row = $sth->fetchrow_hashref()) {
 	$stop_id = $row->{stop_id};
-	if (defined $row->{stop_name}) { $stop_name = $row->{stop_name}; }
+	if (defined $row->{stop_name} and $row->{stop_name} ne "") { $stop_name = $row->{stop_name}; }
+	elsif (defined $row->{stop_name_bzn}) { $stop_name = $row->{stop_name_bzn}; }
 	if (defined $row->{zone_id}) { $zone_id = $row->{zone_id}; }
 	if (defined $row->{plan} and exists $crs{$row->{plan}} and defined $row->{stop_lat} and defined $row->{stop_lon}) {
 		$stop_lat = $row->{stop_lat};
@@ -131,29 +135,29 @@ while (my $row = $sth->fetchrow_hashref()) {
 		$stop_lat = undef;
 	}
 
-	my $insertsth = $dbh->prepare('INSERT OR REPLACE INTO stops VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
-	$insertsth->execute($stop_id,undef,$stop_name,$stop_lat,$stop_lon,$zone_id,"1",undef,undef);
+	$insertsth->execute($stop_id, undef, $stop_name, $stop_lat, $stop_lon, $zone_id, "1", undef, undef);
 }
-
-print "...and written to GTFS database\n";
+$dbh->commit();
+print " and written to GTFS database\n";
 
 # Child station handling
 
 print "Child stations";
 
-$sth = $divadbh->prepare('SELECT S.hstnr AS stop_id, S.hstname AS stop_name, group_concat(tz.tzonen,"") as zone_id, SHS.steig AS steig, SPK.x AS stop_lat, SPK.y AS stop_lon, SPK.plan AS plan FROM Stop AS S
-LEFT OUTER JOIN Stop_tzonen as tz ON S._AutoKey_=tz._FK__AutoKey_
+$sth = $divadbh->prepare('SELECT S.hstnr AS stop_id, S.hstname AS stop_name, bzn.hstohne AS stop_name_bzn, group_concat(tz.tzonen, "") as zone_id, SHS.steig AS steig, SPK.x AS stop_lat, SPK.y AS stop_lon, SPK.plan AS plan FROM Stop AS S
+LEFT OUTER JOIN Stop_bzn AS bzn ON S._AutoKey_ = bzn._FK__AutoKey_
+LEFT OUTER JOIN Stop_tzonen as tz ON S._AutoKey_ = tz._FK__AutoKey_
 LEFT OUTER JOIN Stop_hst_steig AS SHS on S._AutoKey_ = SHS._FK__AutoKey_
 LEFT OUTER JOIN StopPlatformKoord AS SPK ON SHS._AutoKey_ = SPK._FK__AutoKey_
-WHERE SHS.steig NOT LIKE "Eing%"
-GROUP BY stop_id, steig, SPK.x');
+WHERE SHS.steig NOT LIKE "Eing%" AND SPK.plan IN (\'' . join('\', \'',  @supported_crs) . '\')
+GROUP BY stop_id, steig');
 $sth->execute();
-
 print(" queried...");
 
 while (my $row = $sth->fetchrow_hashref()) {
 	$stop_id = $row->{stop_id} . $row->{steig};
-	if (defined $row->{stop_name}) { $stop_name = $row->{stop_name}; }
+	if (defined $row->{stop_name} and $row->{stop_name} ne "") { $stop_name = $row->{stop_name}; }
+	elsif (defined $row->{stop_name_bzn}) { $stop_name = $row->{stop_name_bzn}; }
 	if (defined $row->{zone_id}) { $zone_id = $row->{zone_id}; }
 	if (defined $row->{plan} and exists $crs{$row->{plan}} and defined $row->{stop_lat} and defined $row->{stop_lon}) {
 		$stop_lat = $row->{stop_lat};
@@ -169,27 +173,29 @@ while (my $row = $sth->fetchrow_hashref()) {
 		$stop_lat = undef;
 	}
 
-	my $insertsth = $dbh->prepare('INSERT OR REPLACE INTO stops VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
-	$insertsth->execute($stop_id,undef,$stop_name,$stop_lat,$stop_lon,$zone_id,"0",$row->{stop_id},undef);
-
+	$insertsth->execute($stop_id, undef, $stop_name, $stop_lat, $stop_lon, $zone_id, "0", $row->{stop_id}, undef);
 }
-
-print("...and written to GTFS database\n");
+$dbh->commit();
+print(" and written to GTFS database\n");
 
 # Station handling without child stations
 
 print "Stations without child stations";
 
-$sth = $divadbh->prepare('SELECT S.hstnr AS stop_id, S.hstname AS stop_name, group_concat(tz.tzonen,"") as zone_id, HK.x AS stop_lat, HK.y AS stop_lon, HK.plan AS plan FROM Stop AS S
-LEFT OUTER JOIN Stop_tzonen as tz ON S._AutoKey_=tz._FK__AutoKey_
+$sth = $divadbh->prepare('SELECT S.hstnr AS stop_id, S.hstname AS stop_name, bzn.hstohne AS stop_name_bzn, group_concat(tz.tzonen, "") as zone_id, HK.x AS stop_lat, HK.y AS stop_lon, HK.plan AS plan FROM Stop AS S
+LEFT OUTER JOIN Stop_bzn AS bzn ON S._AutoKey_ = bzn._FK__AutoKey_
 LEFT OUTER JOIN Stop_hst_koord as HK ON S._AutoKey_=HK._FK__AutoKey_
-WHERE S._AutoKey_ NOT IN (SELECT SHS._FK__AutoKey_ FROM Stop_hst_steig AS SHS)
-GROUP BY stop_id, HK.x');
+LEFT OUTER JOIN Stop_tzonen as tz ON S._AutoKey_=tz._FK__AutoKey_
+WHERE S._AutoKey_ NOT IN (SELECT SHS._FK__AutoKey_ FROM Stop_hst_steig AS SHS) AND HK.plan IN (\'' . join('\', \'',  @supported_crs) . '\')
+GROUP BY stop_id');
 $sth->execute();
-
 print " queried...";
 
 while (my $row = $sth->fetchrow_hashref()) {
+	$stop_id = $row->{stop_id};
+	if (defined $row->{stop_name} and $row->{stop_name} ne "") { $stop_name = $row->{stop_name}; }
+	elsif (defined $row->{stop_name_bzn}) { $stop_name = $row->{stop_name_bzn}; }
+	if (defined $row->{zone_id}) { $zone_id = $row->{zone_id}; }
 	if (defined $row->{plan} and exists $crs{$row->{plan}} and defined $row->{stop_lat} and defined $row->{stop_lon}) {
 		$stop_lat = $row->{stop_lat};
 		$stop_lon = -1 * ($row->{stop_lon} - $crs{$row->{plan}}{offset});
@@ -204,11 +210,10 @@ while (my $row = $sth->fetchrow_hashref()) {
 		$stop_lat = undef;
 	}
 
-	my $insertsth = $dbh->prepare('INSERT OR REPLACE INTO stops VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
-	$insertsth->execute($row->{stop_id},undef,$row->{stop_name},$stop_lat,$stop_lon,$row->{zone_id},"0",undef,undef);
+	$insertsth->execute($stop_id, undef, $stop_name, $stop_lat, $stop_lon, $zone_id, "0", undef, undef);
 }
-
-print "...and written to GTFS database\n";
+$dbh->commit();
+print " and written to GTFS database\n";
 
 # Station handling without coordinates
 
@@ -226,19 +231,20 @@ print "...and written to GTFS database\n";
 #	}
 
 #	my $insertsth = $dbh->prepare('INSERT INTO stops VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
-#	$insertsth->execute($stop_id,undef,$stop_name,undef,undef,undef,"0",undef,undef);
+#	$insertsth->execute($stop_id, undef, $stop_name, undef, undef, undef, "0", undef, undef);
 #}
 
-$dbh->commit;
-$divadbh->commit;
+$dbh->commit();
+$divadbh->commit();
 
 # ---------------------------------
 # CLEANING UP!
 # ---------------------------------
 
 $divadbh->disconnect();
-print "Diva-Database closed. ";
+print "Diva-Database closed.\n";
 
 $dbh->disconnect();
-print "GTFS-Database closed. ";
-print "Everything done. Bye!\n";
+print "GTFS-Database closed.\n";
+print "Everything done.\n";
+print "Bye!\n";
