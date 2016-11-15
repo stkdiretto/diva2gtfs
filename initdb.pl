@@ -8,17 +8,16 @@ use Getopt::Long;
 
 dbconnect();
 
-GetOptions	(	"drop=s"		=>	\&drophandler,
-							"create=s"	=>	\&createhandler,
-							"clear=s"		=>	\&clearhandler,
-						)
-						or die("Error in command line arguments\n");
+GetOptions	(
+	"drop=s"	=>	\&drophandler,
+	"create=s"	=>	\&createhandler,
+	"clear=s"	=>	\&clearhandler,
+) or die("Error in command line arguments\n");
 
 my $dbh;
 my $divadbh;
 
 disconnect();
-
 
 sub drophandler {
 	my ($opt_name, $opt_value) = @_;
@@ -395,6 +394,11 @@ sub cleardiva {
 
 sub disconnect {
 	$dbh->disconnect();
+	print "GTFS-Database closed.\n";
+
 	$divadbh->disconnect();
-	print "Disconnected. Bye.\n";
+	print "Diva-Database closed.\n";
+
+	print "Everything done.\n";
+	print "Bye!\n";
 }

@@ -246,7 +246,7 @@ sub shape_request {
 				my $shapesth = $dbh->prepare('INSERT INTO shapes (shape_id, shape_pt_lat, shape_pt_lon, shape_pt_sequence) VALUES (?,?,?,?)');
 				$shapesth->execute($Trips{$shapetrip}{shape_id},$latitude,$longitude,$sequence);
 			}
-		$sequence++;
+			$sequence++;
 		}
 		$dbh->commit();
 	}
@@ -277,5 +277,7 @@ sub dbconnect {
 
 sub dbdisconnect {
 	$dbh->disconnect();
-	print "Disconnected. Bye.\n";
+	print "Database closed. ";
+	print "Everything done.\n";
+	print "Bye!\n";
 }

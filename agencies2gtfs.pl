@@ -75,9 +75,9 @@ print "Agencies ";
 
 my $sth = $divadbh->prepare('SELECT bzw AS agency_id, bzwtext AS agency_name FROM OpBranch');
 $sth->execute();
-
 print "queried...";
 
+my $sthInsert = $dbh->prepare('INSERT OR REPLACE INTO agency VALUES (?, ?, ?, NULLIF(?, \'\'), NULLIF(?, \'\'), NULLIF(?, \'\'), NULLIF(?, \'\'))');
 while (my $row = $sth->fetchrow_hashref()) {
 	$agency_id = $row->{agency_id};
 	$agency_name = $row->{agency_name};
@@ -87,25 +87,19 @@ while (my $row = $sth->fetchrow_hashref()) {
 	$agency_phone = $defaults{agency_phone};
 	$agency_fare_url = $defaults{agency_fare_url};
 
-	my $sthDelete = $dbh->prepare('DELETE FROM agency WHERE agency_id = ?');
-	$sthDelete->execute($agency_id);
-
-	my $sthInsert = $dbh->prepare('INSERT INTO agency VALUES (?, ?, ?, NULLIF(?, \'\'), NULLIF(?, \'\'), NULLIF(?, \'\'), NULLIF(?, \'\'))');
 	$sthInsert->execute($agency_id, $agency_name, $agency_url, $agency_timezone, $agency_lang, $agency_phone, $agency_fare_url);
 }
-
+$dbh->commit();
 print " and written to GTFS database\n";
-
-$dbh->commit;
-$divadbh->commit;
 
 # ---------------------------------
 # CLEANING UP!
 # ---------------------------------
 
 $divadbh->disconnect();
-print "Diva-Database closed. ";
+print "Diva-Database closed.\n";
 
 $dbh->disconnect();
-print "GTFS-Database closed. ";
-print "Everything done. Bye!\n";
+print "GTFS-Database closed.\n";
+print "Everything done.\n";
+print "Bye!\n";
