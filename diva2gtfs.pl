@@ -40,7 +40,8 @@ GetOptions(
 	"path=s" => \$basepath
 ) or die("Error in command line arguments\n");
 
-my $sth = $divadbh->prepare('SELECT uvz,lierg,kbez,textpfp,TextBAlang FROM TabelleLnrlit');
+my %route_types = read_route_types();
+my $sth = $divadbh->prepare('SELECT uvz, lierg, kbez, textpfp, TextBAlang FROM TabelleLnrlit WHERE aktiv = \'Y\'');
 $sth->execute();
 
 while (my $row = $sth->fetchrow_hashref()) {
@@ -83,7 +84,7 @@ while (my $row = $sth->fetchrow_hashref()) {
 		'route' => $operator . "-" . $textpfp
 	);
 
-	process(%job);
+	process(\%route_types, \%job);
 }
 
 
@@ -101,6 +102,24 @@ while (my $row = $sth->fetchrow_hashref()) {
 close $log;
 
 disconnect();
+
+sub read_route_types {
+	open (FILE, "<", "mapping_route_types.txt") or die("Could not open route_type input file!");
+
+	my %result = ();
+	foreach my $line (<FILE>) {
+		chomp $line;
+
+		if ($line =~ s/(?<route_type>.*);(?<gtfs_type>.*)//) {
+			my $route_type = $+{route_type};
+			my $gtfs_type = $+{gtfs_type};
+
+			$result{$route_type} = $gtfs_type;
+		}
+	}
+
+	return %result;
+}
 
 # ----------------------------------------
 # SUBROUTINE TO EXPAND TIMING PATTERNS
@@ -126,27 +145,26 @@ sub expandtimes {
 	return @timearray;
 }
 
-# -----------------------------------------
-
-
 # ------------------------------------------
 # PROCESS FILE
 # -----------------------------------------
 
 sub process {
-	my %process = @_;
+	my %route_types = %{$_[0]};
+	my %process = %{$_[1]};
 	my $file = $process{path};
 
 	print $log "Now working on $file\n";
 	if (open FILE, "<", "$file") {
 		my $current_line;
 		my $line;
-		my @stops;
-		my %platforms;
-		my $route_type;
+
 		my $direction;
-		my $route_long_name;
 		my %FT;
+		my %platforms;
+		my $route_long_name;
+		my $route_type;
+		my @stops;
 
 		foreach $current_line (<FILE>) {
 			chomp $current_line;
@@ -250,7 +268,7 @@ sub process {
 						$tripid = $+{tripid};
 					}
 					print $log " Tripid $process{tripname}.$tripid at $+{starttime}, Pattern $+{timingpattern}";
-					if (defined $+{vehicletype}) {	print $log "\t$+{vehicletype}"; } else {print $log "\t";}
+					if (defined $+{vehicletype}) { $route_type = $+{vehicletype}; } else { print $log "\t";}
 					if (defined $+{servicerestriction}) { print $log "\t$+{servicerestriction}"; } else { print $log "\t"; }
 					if (defined $+{traintype}) { print $log "\t$+{traintype}"; } else { print $log "\t"; }
 					if (defined $+{trainid}) { print $log " $+{trainid}"; } else { print $log "\t" };
@@ -279,7 +297,7 @@ sub process {
 					}
 
 					my $sth = $dbh->prepare('INSERT OR REPLACE INTO trips (route_id, service_id, trip_id, trip_short_name, direction_id, shape_id) VALUES (?, ?, ?, ?, ?, ?)');
-					$sth->execute($process{route},$service_id,$process{tripname}.$tripid,$trip_short_name,$direction,$process{route}.$timingpattern);
+					$sth->execute($process{route}, $service_id, $process{tripname}.$tripid, $trip_short_name, $direction, $process{route}.$timingpattern);
 
 					# Analyze timing pattern for trip and save stop times
 
@@ -407,20 +425,14 @@ sub process {
 						$route_long_name = $process{textbalang};
 					}
 
-					# take care of route types
-					# bus 						3
-					# bahn (rail)			2
-					# strab (tram)		0
-					# SAM (taxi)			3
+					if (defined $+{routetype} and "$+{routetype}" ne "") {
+						$route_type = $+{routetype};
+					}
 
-					switch ($+{routetype}) {
-						case "bus"		{ $route_type = 3 }
-						case "bahn"		{ $route_type = 2 }
-						case "strab"	{ $route_type = 0 }
-						case "SAM"		{ $route_type = 3 } #FIXME
-						case "AST"		{ $route_type = 3 } #FIXME
-						case "Fahrradbus"		{ $route_type = 3 } #FIXME
-						else					{ $route_type = 99}
+					if (defined $route_type and defined $route_types{$route_type}) {
+						$route_type = $route_types{$route_type};
+					} elsif (! defined $route_type or $route_type eq "") {
+						$route_type = 99;
 					}
 				} else {
 					print "Bus description handling failed! $current_line\n";
@@ -432,8 +444,8 @@ sub process {
 			# -------------------------------------
 		}
 
-		my $sth = $dbh->prepare('UPDATE routes SET route_type = ?, route_long_name= ? where route_id IS ?');
-		$sth->execute($route_type,$route_long_name,$process{route});
+		my $sth = $dbh->prepare('UPDATE routes SET route_type = ?, route_long_name = ? WHERE route_id IS ?');
+		$sth->execute($route_type, $route_long_name, $process{route});
 		$dbh->commit();
 
 		close FILE;

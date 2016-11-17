@@ -90,7 +90,8 @@ Support for other CRS (e.g. GIP1) still needs to be implemented... sometimes... 
 
 ### Step 4: Load route files
 
-After everything has been prepared, the magic can happen. Call
+After everything has been prepared, the magic can happen.
+The file `mapping_route_types.txt` can be extended by DIVA route types, so that they are correctly in the resulting GTFS file. After checking the mappings call
 
 	./diva2gtfs.pl --path </path/to/diva/basedirectory/>
 
@@ -118,6 +119,8 @@ Run the following command:
 This script was created alongside my diploma thesis, [Opening Public Transit Data in Germany – A Status Quo](http://dbis.eprints.uni-ulm.de/1054/), which includes more detailed information on the DIVA data format.
 However, this is nothing more than the result of my reverse engineering the format – without any guarantees as to completeness and/or accuracy.
 
-## Contact the author
+## Contact the author(s)
 
-Reach me via [Twitter (@_stk)](http://www.twitter.com/_stk), or E-Mail `transit at shutterworks dot org`. Further ramblings on public transit and open data (mostly in German) on [my blog](http://stefan.bloggt.es). More Open Data tinkerers and their projects on [UlmAPI](http://www.ulmapi.de), the project of Ulm's _datalove_ working group.
+Reach Stefan via [Twitter (@_stk)](http://www.twitter.com/_stk), or E-Mail `transit at shutterworks dot org`. Further ramblings on public transit and open data (mostly in German) on [my blog](http://stefan.bloggt.es). More Open Data tinkerers and their projects can be fond on [UlmAPI](http://www.ulmapi.de), the home of Ulm's _datalove_ working group.
+
+Reach Niko by E-Mail `niko at krismer dot de` or directly via [Github https://github.com/nikolauskrismer/].

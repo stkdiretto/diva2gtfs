@@ -1,0 +1,7 @@
+diva_type;gtfs_route_type
+AST;3
+bus;3
+bahn;2
+Fahrradbus;3
+SAM;3
+strab;0
