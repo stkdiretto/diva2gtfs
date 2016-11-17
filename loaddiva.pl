@@ -7,12 +7,10 @@ use DBI;
 use File::Basename;
 use File::Path qw(make_path);
 use Text::ParseWords;
-
- use open ':encoding(windows-1252)';
+use open ':encoding(windows-1252)';
 
 # take care of windows newlines
 #$/ = "\n";
-
 
 my $line;
 
@@ -61,6 +59,9 @@ sub process {
 	my $filename = basename($arg);
 	my $opbranch;
 
+	my $exists_table = 0;
+	my $exist_check = "SELECT name FROM sqlite_master WHERE type='table' AND name=?";
+
 	open (FILE, "<", "$arg") or die("Could not open inputfile: $!");
 	if ($filename =~ /.*\.(.*)/) {
 		$opbranch = $1;
@@ -74,24 +75,32 @@ sub process {
 
 		if ($line =~ s/tbl;//) {
 			$currentTable = $line;
-			print "Filling table: $currentTable\n";
-		}
-		elsif ($line =~ s/rec;//) {
+			$exists_table = 0;
 
+			my $sth = $divadbh->prepare($exist_check);
+			$sth->execute($currentTable);
+
+			while (my $row = $sth->fetchrow_hashref()) {
+				print "Filling table: $currentTable\n";
+				$exists_table = 1;
+			}
+
+			if (! $exists_table) {
+				print "Skipping table: $currentTable\n";
+			}
+		} elsif ($exists_table and $line =~ s/rec;//) {
 			my @currentRecord = quotewords(";", 0, $line);
 			my $insertion = "INSERT INTO $currentTable VALUES (";
-				for my $i (0 .. $#currentRecord) {
-					$insertion = $insertion . "?, ";
-				}
+			for my $i (0 .. $#currentRecord) {
+				$insertion = $insertion . "?, ";
+			}
 			$insertion = $insertion . "? )";
 
 			push (@currentRecord, $opbranch);
 
 			my $sth = $divadbh->prepare($insertion);
 			$sth->execute(@currentRecord);
-
 		}
-
 	}
 
 	$divadbh->commit();
