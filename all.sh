@@ -21,6 +21,7 @@ fi
 
 FILE_BZW="${DIVA_PATH}/bzw"
 FILE_LNRLIT="${DIVA_PATH}/lin/lnrlit"
+FILE_TGTYP="${DIVA_PATH}/tgtyp"
 FILES_ANSCHLB="${DIVA_PATH}/anschlb.*"
 FILES_HALTESTELLEN="${DIVA_PATH}/haltestellen*"
 FILES_VBESCH="${DIVA_PATH}/vbesch.*"
@@ -43,6 +44,7 @@ printf "\n%s\n\n" "Loading data into DIVA database"
 ./loaddiva.pl ${FILES_VBESCH}
 ./loaddiva.pl ${FILE_BZW}
 ./loaddiva.pl ${FILES_ANSCHLB}
+#./loaddiva.pl ${FILE_TGTYP}
 ./loaddiva.pl ${FILE_LNRLIT}
 
 printf "\n%s\n\n" "Transforming DIVA to GTFS"

@@ -77,7 +77,11 @@ sub createhandler {
 
 sub clearhandler {
 	my ($opt_name, $opt_value) = @_;
-	if ($opt_value eq "divastops") {
+
+	if ($opt_value eq "divaroutetypes") {
+		# hidden feature :-) (only for debugging)
+		cleardiva_route_types();
+	} elsif ($opt_value eq "divastops") {
 		cleardiva_stops();
 	} elsif ($opt_value eq "divalnrlit") {
 		cleardiva_lnrlit();
@@ -171,7 +175,7 @@ sub creategtfs_runs {
 	$dbh->do("CREATE TABLE IF NOT EXISTS routes (route_id TEXT PRIMARY KEY,agency_id TEXT,route_short_name TEXT,route_long_name TEXT,route_type TEXT,route_color TEXT,route_text_color TEXT)");
 	$dbh->do("CREATE TABLE IF NOT EXISTS trips (route_id TEXT,service_id TEXT,trip_id TEXT PRIMARY KEY,trip_headsign TEXT, trip_short_name TEXT, direction_id INTEGER,block_id INTEGER,shape_id TEXT)");
 	$dbh->do("CREATE INDEX IF NOT EXISTS tr_rid ON trips(route_id)");
-	$dbh->do("CREATE TABLE IF NOT EXISTS stop_times (trip_id TEXT, arrival_time TEXT, departure_time TEXT, stop_id TEXT, stop_sequence INTEGER, stop_headsign TEXT, pickup_type INTEGER, drop_off_type INTEGER, shape_dist_traveled REAL)");
+	$dbh->do("CREATE TABLE IF NOT EXISTS stop_times (trip_id TEXT, arrival_time TEXT, departure_time TEXT, stop_id TEXT, stop_sequence INTEGER, stop_headsign TEXT, pickup_type INTEGER, drop_off_type INTEGER, shape_dist_traveled REAL, PRIMARY KEY (trip_id, stop_sequence))");
 	$dbh->do("CREATE INDEX IF NOT EXISTS st_trid ON stop_times(trip_id)");
 	$dbh->do("CREATE INDEX IF NOT EXISTS st_stid ON stop_times(stop_id)");
 	$dbh->do("CREATE INDEX IF NOT EXISTS st_starrtime ON stop_times(arrival_time)");
@@ -179,7 +183,7 @@ sub creategtfs_runs {
 }
 
 sub creategtfs_calendar {
-	$dbh->do("CREATE TABLE IF NOT EXISTS calendar_dates (service_id Text, date TEXT, exception_type INTEGER, PRIMARY KEY (service_id, date))");
+	$dbh->do("CREATE TABLE IF NOT EXISTS calendar_dates (service_id TEXT, date TEXT, exception_type INTEGER, PRIMARY KEY (service_id, date))");
 	$dbh->do("CREATE INDEX IF NOT EXISTS cd_service ON calendar_dates(service_id)");
 	$dbh->do("CREATE INDEX IF NOT EXISTS cd_date ON calendar_dates(date)");
 	$dbh->do("CREATE TABLE IF NOT EXISTS calendar (service_id Text PRIMARY KEY, monday INTEGER, tuesday INTEGER, wednesday INTEGER, thursday INTEGER, friday INTEGER, saturday INTEGER, sunday INTEGER, start_date TEXT, end_date TEXT)");
@@ -285,6 +289,12 @@ sub creatediva_lnrlit {
 	$divadbh->do("CREATE TABLE IF NOT EXISTS TabelleReferenzLinien ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, _AutoKey_ INTEGER, eLinRefTyp INTEGER, m_strRefLinie VARCHAR(6), input TEXT)");
 }
 
+sub creatediva_route_types {
+	print "Creating DIVA route types\n";
+	$divadbh->do("CREATE TABLE IF NOT EXISTS Transportgefaesse (
+	_AutoKey_ INTEGER, typ VARCHAR(2), kbez VARCHAR(6), rbl_nr VARCHAR(29), sa_komm VARCHAR(40), rst_yn VARCHAR(1), anztuer INTEGER, komfort INTEGER, vmax INTEGER, len_ahf_tgsymbol INTEGER, ahf_tgsymbol VARCHAR(1024), text_hervorheben VARCHAR(12), zob_symbol VARCHAR(40), bez VARCHAR(40), mindestwendezeit INTEGER, fahrzeug_laenge INTEGER, mittlere_beschleunigung REAL, mindestbremshundertstel INTEGER, Gueltig_von INTEGER, Gueltig_bis INTEGER, ErhTyp INTEGER, AnzSubTGTyp INTEGER, input TEXT, PRIMARY KEY (typ, Gueltig_von))");
+}
+
 sub creatediva_servicerestrictions {
 	print "Creating DIVA service restrictions\n";
 	$divadbh->do("CREATE TABLE IF NOT EXISTS SatzAnw ( _FK__AutoKey_ INTEGER, _FK_ARR_IDX INTEGER, Str VARCHAR(60), input TEXT)");
@@ -304,6 +314,7 @@ sub creatediva {
 	creatediva_servicerestrictions();
 	creatediva_transfers();
 	creatediva_agencies();
+	creatediva_route_types();
 }
 
 sub dropdiva_agencies {
@@ -353,6 +364,10 @@ sub dropdiva_lnrlit {
 	$divadbh->do("DROP TABLE IF EXISTS TabelleReferenzLinien");
 }
 
+sub dropdiva_route_types {
+	$divadbh->do("DROP TABLE IF EXISTS Transportgefaesse");
+}
+
 sub dropdiva_servicerestrictions {
 	$divadbh->do("DROP TABLE IF EXISTS SatzAnw");
 	$divadbh->do("DROP TABLE IF EXISTS ServiceRestriction");
@@ -370,6 +385,7 @@ sub dropdiva {
 	dropdiva_servicerestrictions();
 	dropdiva_transfers();
 	dropdiva_agencies();
+	dropdiva_route_types();
 }
 
 sub cleardiva_servicerestrictions() {
@@ -390,6 +406,11 @@ sub cleardiva_stops {
 sub cleardiva {
 	dropdiva();
 	creatediva();
+}
+
+sub cleardiva_route_types {
+	dropdiva_route_types();
+	creatediva_route_types();
 }
 
 sub disconnect {

@@ -54,7 +54,17 @@ sub findtransfers {
 		if ($row->{wttyp_an} eq "A") {
 			# ALL day types! First, from day type 0.
 
-			my %job = ('starttrip' => $startroute.$row->{richt_an}."0%", 'from_stop' => $from_stop, 'from_starttime' => $from_starttime ,'from_endtime' => $from_endtime, 'to_stop' => $to_stop, 'to_starttime' => $to_starttime, 'to_endtime' => $to_endtime, 'block' => $row->{sitz_blb});
+			my %job = (
+				starttrip => $startroute.$row->{richt_an}."0%",
+				from_stop => $from_stop,
+				from_starttime => $from_starttime,
+				from_endtime => $from_endtime,
+				to_stop => $to_stop,
+				to_starttime => $to_starttime,
+				to_endtime => $to_endtime,
+				block => $row->{sitz_blb}
+			);
+
 			if ($row->{wttyp_ab} eq "A") {
 				$job{endtrip} = $endroute.$row->{richt_ab}."0%";
 				messyblockhandler(%job);
@@ -62,8 +72,7 @@ sub findtransfers {
 				messyblockhandler(%job);
 				$job{endtrip} = $endroute.$row->{richt_ab}."3%";
 				messyblockhandler(%job);
-			}
-			else {
+			} else {
 				$job{endtrip} = $endroute.$row->{richt_ab}.$row->{wttyp_ab};
 				messyblockhandler(%job);
 			}
@@ -77,8 +86,7 @@ sub findtransfers {
 				messyblockhandler(%job);
 				$job{endtrip} = $endroute.$row->{richt_ab}."3%";
 				messyblockhandler(%job);
-			}
-			else {
+			} else {
 				$job{endtrip} = $endroute.$row->{richt_ab}.$row->{wttyp_ab};
 				messyblockhandler(%job);
 			}
@@ -92,8 +100,7 @@ sub findtransfers {
 				messyblockhandler(%job);
 				$job{endtrip} = $endroute.$row->{richt_ab}."3%";
 				messyblockhandler(%job);
-			}
-			else {
+			} else {
 				$job{endtrip} = $endroute.$row->{richt_ab}.$row->{wttyp_ab};
 				messyblockhandler(%job);
 			}
@@ -103,7 +110,16 @@ sub findtransfers {
 		}
 		else { #
 			my $starttrip = $startroute.$row->{richt_an}.$row->{wttyp_an}."%";
-			my %job = ('starttrip' => $starttrip, 'from_stop' => $from_stop, 'from_starttime' => $from_starttime ,'from_endtime' => $from_endtime, 'to_stop' => $to_stop, 'to_starttime' => $to_starttime, 'to_endtime' => $to_endtime, 'block' => $row->{sitz_blb});
+			my %job = (
+				starttrip => $starttrip,
+				from_stop => $from_stop,
+				from_starttime => $from_starttime,
+				from_endtime => $from_endtime,
+				to_stop => $to_stop,
+				to_starttime => $to_starttime,
+				to_endtime => $to_endtime,
+				block => $row->{sitz_blb}
+			);
 
 			# Again, handling of day type A for the departing trips
 			if ($row->{wttyp_ab} eq "A") {
@@ -113,10 +129,9 @@ sub findtransfers {
 				messyblockhandler(%job);
 				$job{endtrip} = $endroute.$row->{richt_ab}."3%";
 				messyblockhandler(%job);
-			}
-			else {
-			$job{endtrip} = $endroute.$row->{richt_ab}.$row->{wttyp_ab}."%";
-			messyblockhandler(%job);
+			} else {
+				$job{endtrip} = $endroute.$row->{richt_ab}.$row->{wttyp_ab}."%";
+				messyblockhandler(%job);
 			}
 		}
 	}
@@ -147,7 +162,7 @@ sub messyblockhandler {
 		my $current_arrival_trip = $arrival_triprow->{trip_id};
 		my $current_arrival_stop = $arrival_triprow->{stop_id};
 
-		 # Transfer by staying on the vehicle
+		# Transfer by staying on the vehicle
 		if ($messyparams{block} eq "Y" or $messyparams{block} eq "y") {
 			# Does the inbound trip already have a block ID? If yes, we'll use that later on!
 			if (defined $arrival_triprow->{block_id}) {
@@ -157,7 +172,7 @@ sub messyblockhandler {
 			else {
 				$block_identifier{$current_arrival_trip} = $current_arrival_trip;
 			}
-			print ("trip1: " , $current_arrival_trip, " $current_arrival_time gets " . $block_identifier{$current_arrival_trip});
+			print ("trip1: " , $current_arrival_trip, " $current_arrival_time gets " . $block_identifier{$current_arrival_trip}, "\n");
 		}
 
 		# Let's find matching departure trips for this arrival trip! Look at all
@@ -174,6 +189,7 @@ sub messyblockhandler {
 
 		$sth->execute($messyparams{endtrip}, $current_arrival_time,$messyparams{to_endtime}, $messyparams{from_stop}."%", $arrival_triprow->{service_id});
 
+		my $transfersth = $dbh->prepare('INSERT INTO transfers (from_stop_id, to_stop_id, transfer_type, from_trip_id, to_trip_id) VALUES (?, ?, ?, ?, ?)');
 		while (my $departure_triprow = $sth->fetchrow_hashref()) {
 			my $current_departure_trip = $departure_triprow->{trip_id};
 			my $current_departure_stop = $departure_triprow->{stop_id};
@@ -181,27 +197,28 @@ sub messyblockhandler {
 			# Transfer by staying on the vehicle
 			if (($messyparams{block} eq "Y") or ($messyparams{block} eq "y")) {
 				$block_identifier{$current_departure_trip} = $block_identifier{$current_arrival_trip};
-				print (" trip2: " , $departure_triprow->{trip_id} , ", ", $departure_triprow->{arrival_time} ," gets " . $block_identifier{$current_departure_trip} . "\n");
+				print ("trip2: " , $departure_triprow->{trip_id} , ", ", $departure_triprow->{arrival_time} ," gets " . $block_identifier{$current_departure_trip} . "\n");
 			}
 			# Else: Write a transfer
 			elsif ($messyparams{block} eq "N") {
-			my $transfersth = $dbh->prepare('INSERT INTO TRANSFERS (from_stop_id, to_stop_id, transfer_type, from_trip_id, to_trip_id) VALUES (?, ?, ?, ?, ?)');
-			$transfersth->execute($current_arrival_stop, $current_departure_stop, 1, $current_departure_trip, $current_arrival_trip);
+				$transfersth->execute($current_arrival_stop, $current_departure_stop, 1, $current_departure_trip, $current_arrival_trip);
 			}
 		}
+
+		$dbh->commit();
 	}
 
 	# Finally, if the current request was for block transfers, use the temporary hash
 	# to write everything to the GTFS database!
 	if ($messyparams{block} eq "Y") {
+		my $updatesth = $dbh->prepare('UPDATE trips SET block_id = ? WHERE trip_id = ?');
 		for (keys %block_identifier) {
-#		 print "$_: $block_identifier{$_}\n"
-			my $updatesth = $dbh->prepare('UPDATE trips SET block_id = ? WHERE trip_id = ?');
+#			print "$_: $block_identifier{$_}\n"
 			$updatesth->execute($block_identifier{$_}, $_);
 		}
-	}
 
-	$dbh->commit();
+		$dbh->commit();
+	}
 }
 
 #--------------------------------------------------------------------
