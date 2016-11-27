@@ -27,7 +27,7 @@ Additionally, the following Perl modules are necessary:
 $ perl -MCPAN -e shell
 cpan[n]> install DBI
 cpan[n]> install DateTime
-cpan[n]> install Date::Holidays::DE
+cpan[n]> install Date::Holidays::DE (or Date::Holidays::AT)
 cpan[n]> install DateTime::Format::Strptime
 cpan[n]> install File::Path
 ```
@@ -57,7 +57,7 @@ Just run `./initdb.pl --create all` to create both DIVA and GTFS databases: `bui
 		--drop # drops tables if existing
 		--clear  # drops tables and rebuild them
 	Options:
-		all - all of the DIVA and GTFS tables
+		all -- all of the DIVA and GTFS tables
 		diva -- all of the DIVA tables
 		divalnrlit -- DIVA tables pointing to route definition files
 		divaservice -- DIVA tables concerning service restrictions
@@ -85,8 +85,20 @@ Agencies can be filled with additional information using the parameter "set":
 
 	./agencies2gtfs.pl --set agency_url="http://www.meinVerkehrsbetrieb.de" --set agency_phone=00491234567
 
-For the coordinate transformation, `cs2cs` from `proj(1)` is needed. Currently, only a subset of coordinate reference systems (specified in the column `plan` in the DIVA tables) will be converted.
-Support for other CRS (e.g. GIP1) still needs to be implemented... sometimes... by someone (pull requests are appreciated).
+For the coordinate transformation, `cs2cs` from `proj(1)` is needed. Currently, only a subset of coordinate reference systems (specified in the column `plan` in the DIVA tables) will be converted:
+
+| Keyword | Ellipsoid    | CRS                 | Offset    |
+| ------- | ------------ | ------------------- | ----------|
+| MVTT    | [Bessel 1841](https://en.wikipedia.org/wiki/Bessel_ellipsoid) | [Gauss-Krüger](https://en.wikipedia.org/wiki/Gauss%E2%80%93Kr%C3%BCger_coordinate_system) Zone 2 | 6 160 100 |
+| NAV2    | Bessel 1841  | Gauss-Krüger Zone 2 | 6 160 100 |
+| NAV3    | Bessel 1841  | Gauss-Krüger Zone 3 | 6 160 100 |
+| NAV4    | Bessel 1841  | Gauss-Krüger Zone 4 | 6 160 100 |
+| NAV5    | Bessel 1841  | Gauss-Krüger Zone 5 | 6 160 100 |
+| NBWT    | Bessel 1841  | Gauss-Krüger Zone 3 | 6 160 100 |
+| STVH    | Bessel 1841  | [ÖBMN](https://de.wikipedia.org/wiki/%C3%96sterreichisches_Bundesmeldenetz) M34 | 1 000 000 |
+| VVTT    | Bessel 1841  | ÖBMN M28            | 1 000 000 |
+
+Support for other CRS (e.g. GIP1, TFLV, ITMR, MTCV, GDAV) still needs to be implemented... sometimes... by someone (pull requests are appreciated). See [Appendix A.2.2](http://dbis.eprints.uni-ulm.de/1054/1/Kaufmann2014.pdf) for details.
 
 ### Step 4: Load route files
 
@@ -116,11 +128,12 @@ Run the following command:
 
 ## Further reading
 
-This script was created alongside my diploma thesis, [Opening Public Transit Data in Germany – A Status Quo](http://dbis.eprints.uni-ulm.de/1054/), which includes more detailed information on the DIVA data format.
-However, this is nothing more than the result of my reverse engineering the format – without any guarantees as to completeness and/or accuracy.
+This script was created alongside Stefans diploma thesis, [Opening Public Transit Data in Germany – A Status Quo](http://dbis.eprints.uni-ulm.de/1054/), which includes more detailed information on the DIVA data format.
+However, this is nothing more than the result of reverse engineering the format – without any guarantees as to completeness and/or accuracy.
+Niko expanded on the features and some shortcomings of the implementation during his dissertation.
 
 ## Contact the author(s)
 
-Reach Stefan via [Twitter (@_stk)](http://www.twitter.com/_stk), or E-Mail `transit at shutterworks dot org`. Further ramblings on public transit and open data (mostly in German) on [my blog](http://stefan.bloggt.es). More Open Data tinkerers and their projects can be fond on [UlmAPI](http://www.ulmapi.de), the home of Ulm's _datalove_ working group.
+Reach Stefan via [Twitter (@_stk)](http://www.twitter.com/_stk), or E-Mail `transit at shutterworks dot org`. Further ramblings on public transit and open data (mostly in German) on [Stefans blog](http://stefan.bloggt.es). More Open Data tinkerers and their projects can be found on [UlmAPI](http://www.ulmapi.de), the home of Ulm's _datalove_ working group.
 
-Reach Niko by E-Mail `niko at krismer dot de` or directly via [Github https://github.com/nikolauskrismer/].
+Reach Niko by E-Mail `niko at krismer dot de` or directly via [Github](https://github.com/nikolauskrismer/).
